@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-> **Assembly Line fork** of `~/ec2code/finopsbricks/lib/lib-worker` (remote `finopsbricks`).
-> History starts fresh at 0.1.0; the history before it is in the private repo
+> **Assembly Line fork** of FinOpsBricks' lib-worker (remote `finopsbricks`). History starts
+> fresh at 0.1.0; the history before it is in the private repo
 > `assemblyline-sh/lib-factory-archive` (remote `archive`). Fixes from lib-worker carry over
 > with `git cherry-pick` (unrelated histories apply as patches).
-> Workspace rules and vocabulary: `~/ec2code/assemblyline/CLAUDE.md`.
+> Workspace rules and vocabulary: `CLAUDE.md` in the workspace folder above this repo (`../..`).
 
 Guidance for Claude Code when working with this package.
 
@@ -26,7 +26,7 @@ Guidance for Claude Code when working with this package.
 
 ### Related Repositories
 
-Part of **Assembly Line** (`~/ec2code/assemblyline/`):
+Part of **Assembly Line** (GitHub org `assemblyline-sh`; in the workspace, paths are relative to `../..`):
 
 - **`apps/orchestrator.assemblyline.sh`** — dispatches steps to factory sessions and keeps
   work records.
@@ -37,8 +37,8 @@ Part of **Assembly Line** (`~/ec2code/assemblyline/`):
   `cli/al-factory`, which did both, is deprecated.
 - **`cli/al-orc`** — the orchestrator's CLI: lines, stations, runs, work records.
 
-Station libraries (`@fob/lib-worker-ai`, `-google`, `-email`) are still FinOpsBricks packages;
-they don't import this one, so factories use them unchanged.
+Optional station libraries (AI, Google, email) live outside this repo; they don't import this
+one, so factories use them unchanged.
 
 ## Package Structure
 
@@ -92,9 +92,9 @@ validated at startup by `validateEnv()`. See `.env.example`.
 
 ## Releasing
 
-Releases are git tags (`v0.1.0`). After `/release` updates the version, run
-`/bump-dependents` to move every factory repo under `~/ec2code/assemblyline/` to the new
-tag.
+Releases are git tags (`v0.1.0`) and npm versions of `@assemblyline/lib-factory`. After
+`/release` updates the version, tag, push and `npm publish`, then run `/bump-dependents` to
+move every factory repo in the workspace to the new version.
 
 ## Key Principles
 
@@ -104,7 +104,5 @@ tag.
 
 ## Documentation
 
-- **FDE Handbook** (`~/ec2code/finopsbricks/handbooks/fde-handbook`) — step patterns, line
-  design
-- **Engineering Standards** (`/Users/alex/ec2code/alex/engineering-standards`) — JS,
-  testing, git conventions
+- [assemblyline.sh/docs](https://assemblyline.sh/docs) — concepts, quickstart, using agents
+- `docs/` in this repo — architecture notes, decisions and work in progress

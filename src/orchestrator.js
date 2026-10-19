@@ -11,6 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import { getSessionId } from './factory.js';
 import { isLocalRun } from './local-run.js';
+import { orchestratorUrl } from './utils/orchestrator-url.js';
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -68,7 +69,7 @@ export async function attachDocument(work_record_id, title, content, step_slug) 
 
   if (isLocalRun(work_record_id)) return true;
 
-  const url = process.env.ORCHESTRATOR_URL || 'http://localhost:3000';
+  const url = orchestratorUrl();
 
   try {
     const response = await fetch(`${url}/api/factory/attach-document`, {
@@ -134,7 +135,7 @@ export async function attachFile(work_record_id, title, filepath, step_slug) {
   const mime_type = MIME_MAP[ext] || 'application/octet-stream';
   const filename = path.basename(filepath);
 
-  const url = process.env.ORCHESTRATOR_URL || 'http://localhost:3000';
+  const url = orchestratorUrl();
 
   try {
     const file_buffer = fs.readFileSync(filepath);
@@ -185,7 +186,7 @@ function getBaseHeaders() {
 }
 
 export async function orchestratorGet(urlPath) {
-  const url = process.env.ORCHESTRATOR_URL || 'http://localhost:3000';
+  const url = orchestratorUrl();
   const res = await fetch(`${url}${urlPath}`, {
     headers: getBaseHeaders(),
   });
@@ -197,7 +198,7 @@ export async function orchestratorGet(urlPath) {
 }
 
 export async function orchestratorPost(urlPath, body) {
-  const url = process.env.ORCHESTRATOR_URL || 'http://localhost:3000';
+  const url = orchestratorUrl();
   const res = await fetch(`${url}${urlPath}`, {
     method: 'POST',
     headers: {
@@ -223,7 +224,7 @@ export async function attachReport(work_record_id, content) {
 
   if (isLocalRun(work_record_id)) return true;
 
-  const url = process.env.ORCHESTRATOR_URL || 'http://localhost:3000';
+  const url = orchestratorUrl();
 
   try {
     const response = await fetch(`${url}/api/factory/attach-report`, {
@@ -277,7 +278,7 @@ export async function attachWorkpieces(work_record_id, workpieces) {
 
   if (isLocalRun(work_record_id)) return true;
 
-  const url = process.env.ORCHESTRATOR_URL || 'http://localhost:3000';
+  const url = orchestratorUrl();
 
   try {
     const response = await fetch(`${url}/api/factory/attach-workpieces`, {

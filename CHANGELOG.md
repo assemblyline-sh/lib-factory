@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-19
+
+### Fixed
+- `ORCHESTRATOR_URL` defaults to `https://orchestrator.assemblyline.sh`, the same default as
+  al-orc and factory-template's `.env.example` (was `http://localhost:3000`). Set it to
+  `http://localhost:3000` to use a local Orchestrator.
+- README: `attachFile(work_record_id, title, filepath, step_slug)` takes a path on disk, not a
+  buffer and filename.
+
+### Changed
+- `CLAUDE.md` and the `bump-dependents` command no longer name local paths; dependents bump to
+  the npm version. Test fixtures use example URLs.
+
 ## [0.2.1] - 2026-10-19
 
 ### Changed

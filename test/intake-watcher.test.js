@@ -58,7 +58,7 @@ describe('pathHasWork', () => {
     mkfile('inbox.txt');
     assert.equal(await pathHasWork(abs('inbox.txt')), false);
 
-    mkfile('inbox.txt', 'https://www.carwale.com/used/123\n');
+    mkfile('inbox.txt', 'https://example.com/listing/123\n');
     assert.equal(await pathHasWork(abs('inbox.txt')), true);
   });
 
@@ -108,7 +108,7 @@ describe('checkAndTriggerIntake', () => {
   });
 
   it('does not trigger when a run is already in flight', async () => {
-    mkfile('inbox.txt', 'https://www.carwale.com/used/123\n');
+    mkfile('inbox.txt', 'https://example.com/listing/123\n');
     hasInFlightRunImpl = async () => true;
 
     await checkAndTriggerIntake([{ station: 'CAR0', station_id: 'car0id', watch_path: abs('inbox.txt') }]);

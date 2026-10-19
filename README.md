@@ -20,7 +20,7 @@ Or pin a release tag from GitHub: `npm install github:assemblyline-sh/lib-factor
 | `ORCHESTRATOR_API_KEY` | Yes | — | Orchestrator API key (also identifies the org) |
 | `ORCHESTRATOR_API_SECRET` | Yes | — | Orchestrator API secret |
 | `FACTORY_LOCATION` | Yes | — | Where this factory session runs (sent as `X-Location`). The orchestrator dispatches only steps of lines whose `location` matches; at most one session per org and location |
-| `ORCHESTRATOR_URL` | No | `http://localhost:3000` | Orchestrator server URL, e.g. `https://orchestrator.assemblyline.sh` |
+| `ORCHESTRATOR_URL` | No | `https://orchestrator.assemblyline.sh` | Orchestrator server URL; set `http://localhost:3000` for a local Orchestrator |
 | `POLL_INTERVAL_MS` | No | `2000` | Polling frequency (ms) |
 | `NODE_ENV` | No | — | When set to `development`, dev-mode behaviors apply (e.g. `clearTemp` becomes a no-op) |
 
@@ -67,7 +67,7 @@ factory's local `.orchestrator/` files) when it has work and no run in flight.
 |---|---|
 | `attachDocument(work_record_id, title, content, step_slug)` | Attach a supporting markdown document |
 | `attachReport(work_record_id, content)` | Attach the final summary report |
-| `attachFile(work_record_id, title, buffer, filename, step_slug)` | Attach a binary file (Excel, PDF, etc.) |
+| `attachFile(work_record_id, title, filepath, step_slug)` | Attach a file from disk (Excel, PDF, CSV, PNG, JPEG; up to 10 MB) |
 | `attachWorkpieces(work_record_id, workpieces)` | Report each workpiece's outcome (`done` or `failed`) |
 | `clearTemp(work_record_id)` | Clear temp files for a work record (no-op in dev mode) |
 

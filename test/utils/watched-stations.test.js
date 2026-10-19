@@ -225,11 +225,11 @@ describe('resolveIntakeWatchedStations', () => {
       short_code: 'CAR0',
       line: 'CAR',
       watch_enabled: true,
-      steps: [{ slug: 'CAR0_01_discover_urls', config: { watch_path: '/Users/alex/carwale-archive/inbox.txt' } }],
+      steps: [{ slug: 'CAR0_01_discover_urls', config: { watch_path: '/home/acme/intake/inbox.txt' } }],
     });
 
     assert.deepEqual(await resolveIntakeWatchedStations(), [
-      { station: 'CAR0', station_id: 'car0id', watch_path: '/Users/alex/carwale-archive/inbox.txt' },
+      { station: 'CAR0', station_id: 'car0id', watch_path: '/home/acme/intake/inbox.txt' },
     ]);
   });
 

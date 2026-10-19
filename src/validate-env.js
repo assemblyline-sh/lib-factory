@@ -5,6 +5,8 @@
  * Fails fast if anything is missing.
  */
 
+import { orchestratorUrl } from './utils/orchestrator-url.js';
+
 /**
  * Validate required environment variables. Exits the process when any is missing.
  */
@@ -24,6 +26,6 @@ export function validateEnv() {
   }
 
   console.log('[Factory] Environment validated');
-  console.log('[Factory] Orchestrator:', process.env.ORCHESTRATOR_URL || 'http://localhost:3000');
+  console.log('[Factory] Orchestrator:', orchestratorUrl());
   console.log('[Factory] Location:', process.env.FACTORY_LOCATION);
 }

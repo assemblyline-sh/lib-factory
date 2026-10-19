@@ -8,6 +8,7 @@ import { validateEnv } from './validate-env.js';
 import { initTemplates } from './utils/template-renderer.js';
 import { buildUserAgent } from './utils/build-user-agent.js';
 import { cleanupOrphanedDoing } from './utils/workpiece-station.js';
+import { orchestratorUrl } from './utils/orchestrator-url.js';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -33,7 +34,7 @@ export function getSessionId() {
  * @returns {Promise<object|null>}
  */
 async function pollForTask() {
-  const url = process.env.ORCHESTRATOR_URL || 'http://localhost:3000';
+  const url = orchestratorUrl();
 
   const headers = {
     'api-key': process.env.ORCHESTRATOR_API_KEY,
@@ -108,7 +109,7 @@ async function pollForTask() {
  * @param {object} output
  */
 async function reportComplete(step_queue_id, output) {
-  const url = process.env.ORCHESTRATOR_URL || 'http://localhost:3000';
+  const url = orchestratorUrl();
 
   const headers = {
     'api-key': process.env.ORCHESTRATOR_API_KEY,
@@ -142,7 +143,7 @@ async function reportComplete(step_queue_id, output) {
  * @param {boolean} retryable
  */
 async function reportFailed(step_queue_id, error, retryable = true) {
-  const url = process.env.ORCHESTRATOR_URL || 'http://localhost:3000';
+  const url = orchestratorUrl();
 
   const headers = {
     'api-key': process.env.ORCHESTRATOR_API_KEY,
@@ -181,7 +182,7 @@ async function reportFailed(step_queue_id, error, retryable = true) {
 async function reportDisconnect() {
   if (!session_id) return;
 
-  const url = process.env.ORCHESTRATOR_URL || 'http://localhost:3000';
+  const url = orchestratorUrl();
 
   try {
     await fetch(`${url}/api/factory/disconnect`, {
@@ -246,12 +247,12 @@ export async function startFactory({ getHandler, callerUrl }) {
   // Build user agent string once at startup
   factory_user_agent = buildUserAgent({ callerUrl });
 
-  const orchestratorUrl = process.env.ORCHESTRATOR_URL || 'http://localhost:3000';
+  const orchestrator_url = orchestratorUrl();
   const pollInterval = parseInt(process.env.POLL_INTERVAL_MS) || 2000;
 
   console.log('================================================');
   console.log('[Factory] Starting factory session...');
-  console.log('[Factory] Orchestrator:', orchestratorUrl);
+  console.log('[Factory] Orchestrator:', orchestrator_url);
   console.log('[Factory] Location:', process.env.FACTORY_LOCATION);
   console.log('[Factory] Poll interval:', pollInterval, 'ms');
   console.log('[Factory] User-Agent:', factory_user_agent);
