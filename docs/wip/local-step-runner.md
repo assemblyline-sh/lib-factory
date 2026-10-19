@@ -1,6 +1,6 @@
 # Local step runner: run a step from inside lib-factory
 
-## Status: IN PROGRESS (~75%)
+## Status: IN PROGRESS (~90%)
 
 Move "run a step locally" (`al-factory steps run` and `steps list`) out of the global
 al-factory CLI and into lib-factory, as a command lib-factory ships (a `bin`). Every factory
@@ -120,7 +120,7 @@ the CLI is a thin shell over it.
 - [x] al-factory's jest tests for these commands mock lib-factory and the file helpers; they
       are replaced by the real-step tests above rather than ported. 107 tests pass (32 new)
 
-### Phase 4: Release and try it on real factories 🔄
+### Phase 4: Release and try it on real factories ✅
 - [x] CHANGELOG, README section "Run a step locally", `docs/architecture/local-step-runner.md`;
       update the `al-factory` mentions in `CLAUDE.md` and `src/orchestrator.js`
 - [x] Version 0.2.0, tagged `v0.2.0`
@@ -129,18 +129,24 @@ the CLI is a thin shell over it.
       `steps list` finds the same 37 steps plus `lib-factory:move_files`
 - [x] factory-actual, factory-alex-mac, factory-chisel, factory-template: `steps list` loads
       every step (5, 12, 18, 3)
-- [ ] Push the tag; bump every factory to `v0.2.0` (needs the tag on GitHub, since factories
-      install from it); factory-template gets `"step": "factory steps run"`
+- [x] Tag pushed; every factory bumped to `v0.2.0` and `npx factory steps list` run in place
+      (`npm install "@assemblyline/lib-factory@github:assemblyline-sh/lib-factory#v0.2.0"`; a
+      plain `npm install` keeps the commit pinned in the lockfile). factory-template gets
+      `"step": "factory steps run"`
+- [x] Factory test suites on 0.2.0: template 2, alex 174, actual 27, chisel 306 pass;
+      alex-mac 141 of 142 (`openrouter-whisper.test.js` fails on 0.1.0 too)
 
-### Phase 5: Point everything at it ❌
-- [ ] Factory CLAUDE.md and README files (`steps list`/`steps run` lines only; the floor commands
-      wait for al-control)
-- [ ] Skill `migrate-worker-to-factory`: `SKILL.md` and `scripts/apply-renames.sh` use
-      `npx factory steps list`
-- [ ] al-factory: notice on `steps list/run` and `stations update-step-metadata` (R6)
-- [ ] assemblyline.sh docs (`quickstart.mdx`, `ai-agents.mdx`, `index.mdx`) and the
-      orchestrator's docs (`index.mdx`, `guide/concepts.mdx`). The site still says
+### Phase 5: Point everything at it 🔄
+- [x] Factory CLAUDE.md and README files (`steps list`/`steps run` lines only; the floor commands
+      wait for al-control): template, alex, alex-mac, chisel (`docs/lines/BK-DI.md`)
+- [x] Skill `migrate-worker-to-factory`: installs `v0.2.0`, checks with `npx factory steps list`;
+      al-factory is no longer a prerequisite
+- [x] al-factory: notice on `steps list/run` and `stations update-step-metadata` (R6)
+- [x] The orchestrator's docs (`index.mdx`, `guide/concepts.mdx`)
+- [ ] assemblyline.sh docs (`quickstart.mdx`, `ai-agents.mdx`, `index.mdx`). The site still says
       `fob-worker`, so this lands with the site's own rename
+- [ ] factory-alex and others on alex-linux-pc: `npm install` there before the next restart
+      (the running sessions are unaffected until then)
 
 ### Phase 6: Retire al-factory ❌
 Only once al-control exists and has taken `lines`, `stations status`, `workpieces` and `procs`
