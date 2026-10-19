@@ -1,6 +1,9 @@
 # CLAUDE.md
 
 > **Assembly Line fork** of `~/ec2code/finopsbricks/lib/lib-worker` (remote `finopsbricks`).
+> History starts fresh at 0.1.0; the history before it is in the private repo
+> `assemblyline-sh/lib-factory-archive` (remote `archive`). Fixes from lib-worker carry over
+> with `git cherry-pick` (unrelated histories apply as patches).
 > Workspace rules and vocabulary: `~/ec2code/assemblyline/CLAUDE.md`.
 
 Guidance for Claude Code when working with this package.
