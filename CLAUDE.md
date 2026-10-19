@@ -32,8 +32,9 @@ Part of **Assembly Line** (`~/ec2code/assemblyline/`):
   work records.
 - **`factories/*`** — factory repos that consume this package; `factory-template` is the
   starter.
-- **`cli/al-factory`** — inspects bins and processes inside a factory repo. Running steps
-  moved into this package as the `factory` command (`bin/factory.js`).
+- **`cli/al-control`** — the control room CLI: bins, workpieces and processes of any factory,
+  on any host. Running steps is this package's `factory` command (`bin/factory.js`);
+  `cli/al-factory`, which did both, is deprecated.
 - **`cli/al-orc`** — the orchestrator's CLI: lines, stations, runs, work records.
 
 Station libraries (`@fob/lib-worker-ai`, `-google`, `-email`) are still FinOpsBricks packages;
