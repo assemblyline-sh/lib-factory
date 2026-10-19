@@ -1,6 +1,6 @@
 {
   "name": "@assemblyline/lib-factory",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "The runtime for Assembly Line factories: factory sessions, steps, bins, workpieces and watchers",
   "type": "module",
   "main": "src/index.js",
@@ -11,6 +11,13 @@
   "bin": {
     "factory": "bin/factory.js"
   },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "node --experimental-test-module-mocks --test 'test/**/*.test.js'"
   },
@@ -36,5 +43,8 @@
     "zod": "^4.3.6",
     "zod-to-json-schema": "^3.25.1"
   },
-  "homepage": "https://assemblyline.sh"
+  "homepage": "https://assemblyline.sh",
+  "publishConfig": {
+    "access": "public"
+  }
 }

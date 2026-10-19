@@ -34,11 +34,11 @@ function writeLineFile(code, location) {
 
 /** The lines every test starts from: two at this factory session's location, one elsewhere. */
 function writeDefaultLines() {
-  writeLineFile('CAR', 'alex-laptop1');
-  writeLineFile('AV', 'alex-laptop1');
-  writeLineFile('M', 'alex-laptop1');
-  writeLineFile('BK-SR', 'alex-laptop1');
-  writeLineFile('VM', 'alex-laptop');
+  writeLineFile('CAR', 'box-1');
+  writeLineFile('AV', 'box-1');
+  writeLineFile('M', 'box-1');
+  writeLineFile('BK-SR', 'box-1');
+  writeLineFile('VM', 'box');
 }
 
 describe('resolveWatchedStations', () => {
@@ -47,7 +47,7 @@ describe('resolveWatchedStations', () => {
     original_cwd = process.cwd();
     original_location = process.env.FACTORY_LOCATION;
     process.chdir(tmp_dir);
-    process.env.FACTORY_LOCATION = 'alex-laptop1';
+    process.env.FACTORY_LOCATION = 'box-1';
     writeDefaultLines();
   });
 
@@ -208,7 +208,7 @@ describe('resolveIntakeWatchedStations', () => {
     original_cwd = process.cwd();
     original_location = process.env.FACTORY_LOCATION;
     process.chdir(tmp_dir);
-    process.env.FACTORY_LOCATION = 'alex-laptop1';
+    process.env.FACTORY_LOCATION = 'box-1';
     writeDefaultLines();
   });
 
@@ -291,7 +291,7 @@ describe('findUntriggeredStations', () => {
     original_cwd = process.cwd();
     original_location = process.env.FACTORY_LOCATION;
     process.chdir(tmp_dir);
-    process.env.FACTORY_LOCATION = 'alex-laptop1';
+    process.env.FACTORY_LOCATION = 'box-1';
     writeDefaultLines();
   });
 

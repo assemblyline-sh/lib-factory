@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-19
+
+### Changed
+- Published to npm as `@assemblyline/lib-factory`; the package ships `bin/`, `src/` and the
+  docs only (`files` in package.json).
+- The repo is public. Notes, docs and tests use generic names.
+
 ## [0.2.0] - 2026-10-19
 
 ### Added

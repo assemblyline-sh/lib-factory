@@ -271,8 +271,8 @@ The directory structure is purely organizational. The `slug` in `defineStep()` i
 - `factory-*/src/steps/index.js` — Deleted after migration
 
 ### Reference (parser pattern)
-- `apps/statements.finopsbricks.com/src/utils/parser/detectParsers.js` — Filesystem scan pattern
-- `apps/statements.finopsbricks.com/src/utils/parser/defineParser.js` — Config-based definition
+- A statements app's parser registry: a filesystem scan (`detectParsers`) over config-based
+  definitions (`defineParser`), the pattern this mirrors
 
 ## Prerequisites
 

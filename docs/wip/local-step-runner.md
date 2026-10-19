@@ -127,26 +127,24 @@ the CLI is a thin shell over it.
 - [x] factory-alex (scratch copy, lib-factory linked): `EM1_01_classify_email --station EM1`
       gives the same output through `al-factory steps run` (0.1.0) and `factory steps run`;
       `steps list` finds the same 37 steps plus `lib-factory:move_files`
-- [x] factory-actual, factory-alex-mac, factory-chisel, factory-template: `steps list` loads
-      every step (5, 12, 18, 3)
+- [x] The other factories and factory-template: `steps list` loads every step
 - [x] Tag pushed; every factory bumped to `v0.2.0` and `npx factory steps list` run in place
       (`npm install "@assemblyline/lib-factory@github:assemblyline-sh/lib-factory#v0.2.0"`; a
       plain `npm install` keeps the commit pinned in the lockfile). factory-template gets
       `"step": "factory steps run"`
-- [x] Factory test suites on 0.2.0: template 2, alex 174, actual 27, chisel 306 pass;
-      alex-mac 141 of 142 (`openrouter-whisper.test.js` fails on 0.1.0 too)
+- [x] Every factory's test suite passes on 0.2.0, apart from one test in one factory that
+      fails on 0.1.0 too
 
 ### Phase 5: Point everything at it 🔄
 - [x] Factory CLAUDE.md and README files (`steps list`/`steps run` lines only; the floor commands
-      wait for al-control): template, alex, alex-mac, chisel (`docs/lines/BK-DI.md`)
+      wait for al-control), including line docs that run steps with scenarios
 - [x] Skill `migrate-worker-to-factory`: installs `v0.2.0`, checks with `npx factory steps list`;
       al-factory is no longer a prerequisite
 - [x] al-factory: notice on `steps list/run` and `stations update-step-metadata` (R6)
 - [x] The orchestrator's docs (`index.mdx`, `guide/concepts.mdx`)
 - [ ] assemblyline.sh docs (`quickstart.mdx`, `ai-agents.mdx`, `index.mdx`). The site still says
       `fob-worker`, so this lands with the site's own rename
-- [ ] factory-alex and others on alex-linux-pc: `npm install` there before the next restart
-      (the running sessions are unaffected until then)
+- [x] Factories on other machines: `npm install` there, then restart their sessions
 
 ### Phase 6: Retire al-factory ❌
 Only once al-control exists and has taken `lines`, `stations status`, `workpieces` and `procs`

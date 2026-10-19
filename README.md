@@ -8,8 +8,10 @@ watchers, and the conveyor step.
 ## Install
 
 ```bash
-npm install github:assemblyline-sh/lib-factory#v0.2.0
+npm install @assemblyline/lib-factory
 ```
+
+Or pin a release tag from GitHub: `npm install github:assemblyline-sh/lib-factory#v0.2.1`.
 
 ## Env Vars
 
