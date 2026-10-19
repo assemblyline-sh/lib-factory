@@ -41,8 +41,11 @@ they don't import this one, so factories use them unchanged.
 ## Package Structure
 
 ```
+bin/
+└── factory.js                # `factory` command (steps list/run, stations update-step-metadata)
 src/
 ├── index.js                  # Main exports
+├── cli/                      # The `factory` command: index (args), steps, stations, picker
 ├── factory.js                # startFactory — factory session loop
 ├── validate-env.js           # Fail-fast env validation
 ├── orchestrator.js           # attachDocument, attachFile, attachReport, attachWorkpieces, clearTemp

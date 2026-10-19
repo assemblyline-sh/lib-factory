@@ -1,6 +1,6 @@
 # Local step runner: run a step from inside lib-factory
 
-## Status: IN PROGRESS (~20%)
+## Status: IN PROGRESS (~40%)
 
 Move "run a step locally" (`al-factory steps run` and `steps list`) out of the global
 al-factory CLI and into lib-factory, as a command lib-factory ships (a `bin`). Every factory
@@ -86,15 +86,23 @@ the CLI is a thin shell over it.
       `readJsonDir`)
 - [x] Export `runStepLocally` from `src/index.js`; JSDoc and `// @ts-check`
 
-### Phase 2: The `factory` command ❌
-- [ ] `bin/factory.js` + `"bin": { "factory": "bin/factory.js" }` in package.json
-- [ ] `steps list`, `steps run <slug>` (`--station`, `--scenario`/`-s`, `--empty`/`-e`),
+### Phase 2: The `factory` command ✅
+- [x] `bin/factory.js` + `"bin": { "factory": "bin/factory.js" }` in package.json; code in
+      `src/cli/`
+- [x] `steps list`, `steps run <slug>` (`--station`, `--scenario`/`-s`, `--empty`/`-e`),
       `stations update-step-metadata`, `--help`, `--version`
-- [ ] Port the picker (`cli/al-factory/src/utils/picker.js`, no dependencies)
-- [ ] Load `.env` from the factory root before discovering steps; `initTemplates` from the
+- [x] Port the picker (`src/cli/picker.js`, no dependencies); it refuses without a terminal
+      and points to the flags
+- [x] Load `.env` from the factory root before discovering steps; `initTemplates` from the
       factory's `src/index.js`
-- [ ] Clear errors when run outside a factory (no `src/steps/`), for an unknown slug, and for a
+- [x] Clear errors when run outside a factory (no `src/steps/`), for an unknown slug, and for a
       missing station or scenario (hint: `al-orc stations pull`)
+- [x] Also new: `lib-factory:move_files` is in the registry, so a conveyor station's step 0
+      runs locally too (factories register it by hand in `src/index.js`; al-factory couldn't
+      run it)
+- [x] Tried on a copy of factory-template: EX0 intake → `lib-factory:move_files` → EX1 gives
+      2 done and 1 failed, as the template README says; `steps list` on factory-alex finds 37
+      steps
 
 ### Phase 3: Tests ❌
 - [ ] Fixture factory under `test/fixtures/` with two real `defineStep` steps and a scenario

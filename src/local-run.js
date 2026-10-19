@@ -21,6 +21,7 @@ import { pathToFileURL } from 'node:url';
 import { discoverSteps } from './discover-steps.js';
 import { createHandler } from './define-step.js';
 import { initTemplates } from './utils/template-renderer.js';
+import moveFilesStep from './steps/move_files.js';
 
 const LOCAL_PREFIX = 'local-';
 
@@ -87,7 +88,8 @@ export function buildLocalTask({ slug, config, step_outputs, now = Date.now() })
 }
 
 /**
- * The factory's steps, from `<root>/src/steps`.
+ * The factory's steps, from `<root>/src/steps`, plus lib-factory's shared
+ * `lib-factory:move_files` (which every factory registers in its `src/index.js`).
  *
  * @param {string} root - Factory repo root
  * @returns {Promise<Object<string, import('./define-step.js').StepDefinition<any, any> & { _file?: string }>>}
@@ -97,7 +99,8 @@ export async function discoverFactorySteps(root) {
   if (!fs.existsSync(steps_dir)) {
     throw new Error(`No steps folder at ${steps_dir}. Run this from a factory repo's root.`);
   }
-  return discoverSteps(steps_dir);
+  const steps = await discoverSteps(steps_dir);
+  return { ...steps, [moveFilesStep.slug]: moveFilesStep };
 }
 
 /**
