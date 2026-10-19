@@ -1,0 +1,36 @@
+{
+  "name": "@assemblyline/lib-factory",
+  "version": "0.1.0",
+  "description": "The runtime for Assembly Line factories: factory sessions, steps, bins, workpieces and watchers",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --experimental-test-module-mocks --test 'test/**/*.test.js'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/assemblyline-sh/lib-factory.git"
+  },
+  "keywords": [
+    "assembly-line",
+    "factory",
+    "orchestrator",
+    "automation",
+    "sop"
+  ],
+  "author": "Assembly Line",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "ejs": "^4.0.1",
+    "zod": "^4.3.6",
+    "zod-to-json-schema": "^3.25.1"
+  },
+  "homepage": "https://assemblyline.sh"
+}

@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(git describe:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(while read hash msg)",
+      "Bash(do echo \"=== $msg ===\")",
+      "Bash(done)",
+      "Bash(npm install:*)",
+      "Bash(m1ddc display:*)",
+      "Bash(m1ddc get:*)",
+      "Bash(m1ddc set:*)",
+      "WebFetch(domain:www.amazon.in)",
+      "Bash(read hash:*)"
+    ]
+  }
+}
