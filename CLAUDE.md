@@ -48,6 +48,7 @@ src/
 ├── orchestrator.js           # attachDocument, attachFile, attachReport, attachWorkpieces, clearTemp
 ├── define-step.js            # defineStep, createHandler, getStepHandler
 ├── discover-steps.js         # discoverSteps, createGetHandler
+├── local-run.js              # runStepLocally, isLocalRun — `local-` ids skip the orchestrator
 ├── renderLocal.js            # Co-located EJS template rendering
 ├── factoryPaths.js           # bin(), workRecordDir(), workRecordFile()
 ├── files.js                  # moveWorkpieces(), listWorkpieces(), isWorkpieceDir()
@@ -58,6 +59,7 @@ src/
 └── utils/
     ├── config-resolver.js    # {{env.VAR}} and {{step_slug.field}} resolution
     ├── template-renderer.js  # Two-layer EJS rendering
+    ├── orchestrator-files.js # Readers for .orchestrator/ stations, lines, scenarios
     ├── watched-stations.js   # Stations this session's location watches
     ├── bin-watch-trigger.js  # In-flight check + station run trigger
     ├── workpiece-station.js  # processWorkpiece, cleanupOrphanedDoing

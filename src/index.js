@@ -45,6 +45,9 @@ export { renderLocal } from './renderLocal.js';
 // Config resolution
 export { resolveConfig } from './utils/config-resolver.js';
 
+// Local step runs (`factory steps run`)
+export { runStepLocally, isLocalRun } from './local-run.js';
+
 // Factory repo path conventions
 export { bin, workRecordDir, workRecordFile } from './factoryPaths.js';
 

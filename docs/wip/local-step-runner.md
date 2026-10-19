@@ -1,6 +1,6 @@
 # Local step runner: run a step from inside lib-factory
 
-## Status: NOT STARTED
+## Status: IN PROGRESS (~20%)
 
 Move "run a step locally" (`al-factory steps run` and `steps list`) out of the global
 al-factory CLI and into lib-factory, as a command lib-factory ships (a `bin`). Every factory
@@ -75,15 +75,16 @@ the CLI is a thin shell over it.
 
 ## Implementation Phases
 
-### Phase 1: Runner core in lib-factory ❌
-- [ ] `src/local-run.js`: `runStepLocally()` builds the task (ids `local-…`, `org_id: 'local'`,
+### Phase 1: Runner core in lib-factory ✅
+- [x] `src/local-run.js`: `runStepLocally()` builds the task (ids `local-…`, `org_id: 'local'`,
       `step_outputs` from `temp/`), resolves config, calls the handler, writes
-      `temp/<slug>.json`. `isLocalRun` moves here and `orchestrator.js` imports it
-- [ ] Station and scenario readers (`loadStation`, `getStepConfigFromStation`,
+      `temp/<slug>.json` (config resolved once, by the handler; al-factory resolved it twice). `isLocalRun` moves here and `orchestrator.js` imports it
+- [x] Station and scenario readers (`loadStation`, `getStepConfigFromStation`,
       `findStationsWithStep`, `listScenarios`, `loadScenario`), sharing the
       `.orchestrator/` reading in `watched-stations.js` rather than copying al-factory's
-      `station-files.js`
-- [ ] Export `runStepLocally` from `src/index.js`; JSDoc and `// @ts-check`
+      `station-files.js` (`src/utils/orchestrator-files.js`; `watched-stations.js` now uses its
+      `readJsonDir`)
+- [x] Export `runStepLocally` from `src/index.js`; JSDoc and `// @ts-check`
 
 ### Phase 2: The `factory` command ❌
 - [ ] `bin/factory.js` + `"bin": { "factory": "bin/factory.js" }` in package.json

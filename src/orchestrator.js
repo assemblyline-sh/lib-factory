@@ -10,11 +10,9 @@
 import fs from 'fs';
 import path from 'path';
 import { getSessionId } from './factory.js';
+import { isLocalRun } from './local-run.js';
 
 const isDev = process.env.NODE_ENV === 'development';
-
-/** Local work record IDs (from `al-factory steps run`) should skip remote calls. */
-const isLocalRun = (work_record_id) => work_record_id.startsWith('local-');
 
 /** Resolve the temp directory for a work record. */
 function workRecordDir(work_record_id) {
@@ -274,7 +272,7 @@ export async function attachReport(work_record_id, content) {
  * @returns {Promise<boolean>} true on success, false on any error (logged)
  */
 export async function attachWorkpieces(work_record_id, workpieces) {
-  // Write to local temp for inspection during dev / `al-factory steps run`.
+  // Write to local temp for inspection during dev / `factory steps run`.
   writeToLocalTemp(work_record_id, 'workpieces.json', JSON.stringify(workpieces, null, 2));
 
   if (isLocalRun(work_record_id)) return true;

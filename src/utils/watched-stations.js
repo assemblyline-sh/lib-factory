@@ -17,8 +17,8 @@
  * intake-watched (resolveIntakeWatchedStations).
  */
 
-import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
+import { readJsonDir, linesDir, stationsDir } from './orchestrator-files.js';
 
 /**
  * @typedef {object} WatchedStation
@@ -39,21 +39,6 @@ import path from 'node:path';
  */
 
 /**
- * @param {string} dir
- * @returns {Promise<{ file: string, config: any }[]>}
- */
-async function readJsonDir(dir) {
-  const files = await readdir(dir);
-  const result = [];
-  for (const file of files) {
-    if (!file.endsWith('.json')) continue;
-    const raw = await readFile(path.join(dir, file), 'utf8');
-    result.push({ file, config: JSON.parse(raw) });
-  }
-  return result;
-}
-
-/**
  * Codes of the lines served by this factory session's location.
  *
  * A missing `.orchestrator/lines/` is an error, not "no lines": every station
@@ -64,7 +49,7 @@ async function readJsonDir(dir) {
  * @returns {Promise<Set<string>>}
  */
 async function readLocalLineCodes() {
-  const lines_dir = path.join(process.cwd(), '.orchestrator', 'lines');
+  const lines_dir = linesDir(process.cwd());
   const factory_location = process.env.FACTORY_LOCATION;
 
   let lines;
@@ -91,7 +76,7 @@ async function readLocalLineCodes() {
  * @returns {Promise<{ file: string, config: object }[]>}
  */
 async function readLocationStations() {
-  const stations_dir = path.join(process.cwd(), '.orchestrator', 'stations');
+  const stations_dir = stationsDir(process.cwd());
   const local_line_codes = await readLocalLineCodes();
   const stations = await readJsonDir(stations_dir);
 
