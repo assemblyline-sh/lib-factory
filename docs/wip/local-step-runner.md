@@ -1,6 +1,6 @@
 # Local step runner: run a step from inside lib-factory
 
-## Status: IN PROGRESS (~90%)
+## Status: IN PROGRESS (~95%)
 
 Move "run a step locally" (`al-factory steps run` and `steps list`) out of the global
 al-factory CLI and into lib-factory, as a command lib-factory ships (a `bin`). Every factory
@@ -145,6 +145,9 @@ the CLI is a thin shell over it.
 - [ ] assemblyline.sh docs (`quickstart.mdx`, `ai-agents.mdx`, `index.mdx`). The site still says
       `fob-worker`, so this lands with the site's own rename
 - [x] Factories on other machines: `npm install` there, then restart their sessions
+      (2026-10-19)
+- [x] Published to npm as `@assemblyline/lib-factory` 0.2.1; the repo is public. Factories
+      still pin the GitHub tag `v0.2.0`
 
 ### Phase 6: Retire al-factory ❌
 Only once al-control exists and has taken `lines`, `stations status`, `workpieces` and `procs`
