@@ -1,6 +1,6 @@
 # Local step runner: run a step from inside lib-factory
 
-## Status: IN PROGRESS (~40%)
+## Status: IN PROGRESS (~60%)
 
 Move "run a step locally" (`al-factory steps run` and `steps list`) out of the global
 al-factory CLI and into lib-factory, as a command lib-factory ships (a `bin`). Every factory
@@ -104,14 +104,21 @@ the CLI is a thin shell over it.
       2 done and 1 failed, as the template README says; `steps list` on factory-alex finds 37
       steps
 
-### Phase 3: Tests ❌
-- [ ] Fixture factory under `test/fixtures/` with two real `defineStep` steps and a scenario
-- [ ] Runs a real step through `runStepLocally`: output in `temp/`, the second step reads the
-      first one's output, attach and report calls write locally and make no HTTP call
-- [ ] The command end to end: spawn `bin/factory.js` in the fixture (`steps list`,
-      `steps run --scenario`, `--empty`, unknown slug exits 1)
-- [ ] Port the relevant al-factory tests (`tests/cli/steps/*`, `output`, `steps-loader`,
-      `update-step-metadata`) from jest to `node --test`
+### Phase 3: Tests ✅
+- [x] Fixture factory under `test/fixtures/factory/` with two real `defineStep` steps, two
+      station files and two scenarios. `test/helpers/fixture-factory.js` copies it to a temp
+      dir and links `node_modules/@assemblyline/lib-factory` back here, like a real factory
+- [x] `test/local-run.test.js`: a real step through `runStepLocally`; output in `temp/`; the
+      second step reads the first one's output and `.env`; document, report and workpieces
+      written under `temp/work_records/local-wr-…/` with `fetch` never called
+- [x] `test/cli.test.js` spawns `bin/factory.js` in the fixture: `steps list`,
+      `steps run --scenario/--station/--empty`, chaining, unknown step/station/scenario, no
+      terminal, a throwing step exits 1 without saving, `update-step-metadata`, `--version`,
+      outside a factory
+- [x] `test/utils/orchestrator-files.test.js`: station lookup by prefix, id and short_code;
+      scenarios
+- [x] al-factory's jest tests for these commands mock lib-factory and the file helpers; they
+      are replaced by the real-step tests above rather than ported. 107 tests pass (32 new)
 
 ### Phase 4: Release and try it on real factories ❌
 - [ ] CHANGELOG, README section "Run a step locally", `docs/architecture/local-step-runner.md`;

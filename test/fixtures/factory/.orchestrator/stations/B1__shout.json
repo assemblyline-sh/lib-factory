@@ -1,0 +1,14 @@
+{
+  "id": "st-b1",
+  "short_code": "B1",
+  "line": "A",
+  "name": "shout",
+  "steps": [
+    {
+      "slug": "B1_01_shout",
+      "name": "Shout",
+      "description": "Upper-cases config.text and appends config.suffix.",
+      "config": { "text": "{{A1_01_greet.greeting}}", "suffix": "{{env.FIXTURE_SUFFIX}}" }
+    }
+  ]
+}

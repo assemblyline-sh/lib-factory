@@ -1,0 +1,7 @@
+{
+  "id": "st-a1",
+  "short_code": "A1",
+  "line": "A",
+  "name": "greet",
+  "steps": [{ "slug": "A1_01_greet", "name": "Old name", "description": "Old description", "config": { "name": "station" } }]
+}
