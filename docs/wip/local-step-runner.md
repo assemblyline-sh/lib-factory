@@ -1,6 +1,6 @@
 # Local step runner: run a step from inside lib-factory
 
-## Status: IN PROGRESS (~60%)
+## Status: IN PROGRESS (~75%)
 
 Move "run a step locally" (`al-factory steps run` and `steps list`) out of the global
 al-factory CLI and into lib-factory, as a command lib-factory ships (a `bin`). Every factory
@@ -120,15 +120,17 @@ the CLI is a thin shell over it.
 - [x] al-factory's jest tests for these commands mock lib-factory and the file helpers; they
       are replaced by the real-step tests above rather than ported. 107 tests pass (32 new)
 
-### Phase 4: Release and try it on real factories ❌
-- [ ] CHANGELOG, README section "Run a step locally", `docs/architecture/local-step-runner.md`;
+### Phase 4: Release and try it on real factories 🔄
+- [x] CHANGELOG, README section "Run a step locally", `docs/architecture/local-step-runner.md`;
       update the `al-factory` mentions in `CLAUDE.md` and `src/orchestrator.js`
-- [ ] Tag a minor release
-- [ ] factory-template: bump the tag, add `"step": "factory steps run"`; CLAUDE.md and README
-      use `npx factory steps …`
-- [ ] factory-alex: bump, run a few steps with `--scenario` and `--station`, compare output with
-      `al-factory steps run` on the same input
-- [ ] The other factories: bump and run `npx factory steps list`
+- [x] Version 0.2.0, tagged `v0.2.0`
+- [x] factory-alex (scratch copy, lib-factory linked): `EM1_01_classify_email --station EM1`
+      gives the same output through `al-factory steps run` (0.1.0) and `factory steps run`;
+      `steps list` finds the same 37 steps plus `lib-factory:move_files`
+- [x] factory-actual, factory-alex-mac, factory-chisel, factory-template: `steps list` loads
+      every step (5, 12, 18, 3)
+- [ ] Push the tag; bump every factory to `v0.2.0` (needs the tag on GitHub, since factories
+      install from it); factory-template gets `"step": "factory steps run"`
 
 ### Phase 5: Point everything at it ❌
 - [ ] Factory CLAUDE.md and README files (`steps list`/`steps run` lines only; the floor commands

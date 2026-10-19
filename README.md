@@ -8,7 +8,7 @@ watchers, and the conveyor step.
 ## Install
 
 ```bash
-npm install github:assemblyline-sh/lib-factory#v0.1.0
+npm install github:assemblyline-sh/lib-factory#v0.2.0
 ```
 
 ## Env Vars
@@ -46,6 +46,8 @@ Path conventions are relative to `process.cwd()` (the factory repo root):
 |---|---|
 | `discoverSteps(dir)` | Auto-discover step modules in a directory |
 | `createGetHandler(definitions)` | Build a `getHandler` from a definitions map |
+| `runStepLocally({ slug, config, root })` | Run one step outside a factory session (what `factory steps run` calls) |
+| `isLocalRun(work_record_id)` | True for the `local-` ids a local run uses; attach calls skip the orchestrator for them |
 
 ### Station Triggering
 
@@ -130,6 +132,26 @@ export default defineStep({
   },
 });
 ```
+
+## Run a step locally
+
+lib-factory ships a `factory` command. Every factory repo already has it after `npm install`,
+and it always matches the lib-factory version the repo pins. Run it from the factory's root:
+
+```bash
+npx factory steps list
+npx factory steps run EX1_01_count_words --station EX1        # the step's config in that station
+npx factory steps run EX1_01_count_words --scenario short     # .orchestrator/scenarios/<slug>/short.json
+npx factory steps run EX1_01_count_words --empty              # no config
+npx factory steps run EX1_01_count_words                      # choose from a list
+npx factory stations update-step-metadata                     # copy step names into station files
+```
+
+The step really runs: anything it calls or writes happens. It gets a task shaped like the
+Orchestrator's, with `local-` ids, so `attachDocument`, `attachReport` and the other attach
+calls write to `temp/work_records/local-wr-…/` and never call the Orchestrator. The output is
+saved to `temp/<slug>.json`, and the next local run reads every `temp/*.json` as
+`step_outputs`, so steps chain. `.env` is loaded from the factory root.
 
 ## License
 

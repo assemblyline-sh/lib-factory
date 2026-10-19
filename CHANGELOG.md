@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-19
+
+### Added
+- The `factory` command (`bin/factory.js`): `factory steps list`, `factory steps run <slug>`
+  (`--station`, `--scenario`, `--empty`, or an arrow-key picker) and
+  `factory stations update-step-metadata`. It replaces `al-factory`'s commands of the same
+  names, and runs steps with the same copy of lib-factory the steps import.
+- `runStepLocally()` and `isLocalRun()`: the local run and the `local-` id rule that makes
+  attach calls skip the Orchestrator, in one file (`src/local-run.js`).
+- A local run can run the shared `lib-factory:move_files` step, so a conveyor station's
+  step 0 runs locally too.
+- `dotenv` dependency, for the `factory` command's `.env` loading.
+
+### Changed
+- `watched-stations.js` reads `.orchestrator/` through the new shared readers in
+  `src/utils/orchestrator-files.js`.
+
 ## [0.1.0] - 2026-10-19
 
 First release as `@assemblyline/lib-factory`, forked from `@fob/lib-worker` 0.35.0. Entries

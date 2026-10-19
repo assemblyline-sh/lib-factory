@@ -11,6 +11,7 @@ generation.
 - **Template system** - EJS-based markdown document generation
 - **Bins and workpieces** - Station bin paths, the doing-bin contract, the conveyor step
 - **Watchers** - Bin watcher and intake watcher
+- **The `factory` command** - Run and list a factory's steps locally ([local-step-runner.md](/docs/architecture/local-step-runner.md))
 
 ## Usage
 
