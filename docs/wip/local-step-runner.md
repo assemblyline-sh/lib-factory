@@ -1,6 +1,6 @@
 # Local step runner: run a step from inside lib-factory
 
-## Status: IN PROGRESS (~95%)
+## Status: IN PROGRESS (~98%) — only the site docs are left
 
 Move "run a step locally" (`al-factory steps run` and `steps list`) out of the global
 al-factory CLI and into lib-factory, as a command lib-factory ships (a `bin`). Every factory
@@ -149,11 +149,10 @@ the CLI is a thin shell over it.
 - [x] Published to npm as `@assemblyline/lib-factory` 0.2.1; the repo is public. Factories
       still pin the GitHub tag `v0.2.0`
 
-### Phase 6: Retire al-factory ❌
-Only once al-control exists and has taken `lines`, `stations status`, `workpieces` and `procs`
-(cli-architecture.md, Phase 4 there).
-- [ ] Remove the `steps` and `update-step-metadata` commands from al-factory, then archive the repo
-      and deprecate the npm package
+### Phase 6: Retire al-factory ✅
+- [x] al-control took `lines`, `stations status`, `workpieces` and `procs`, with `-f .` for the
+      factory you're in
+- [x] al-factory archived on GitHub, its npm package deprecated (2026-10-19)
 
 ## Related Files
 
