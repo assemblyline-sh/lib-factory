@@ -14,7 +14,7 @@ function parseBin(name) {
 // `recursive`) fails the step loudly instead of silently moving nothing.
 // `mode: "directories"` is tolerated and ignored: most station files still
 // carry it from when the conveyor had two modes.
-const moveSchema = z.object({
+const move_schema =z.object({
   source_bin: z.string(),
   target_bin: z.string(),
   batch_size: z.number().default(100),
@@ -27,8 +27,8 @@ export default defineStep({
   description: 'Conveyor step — moves workpieces (directories with a pointer.json) from one station bin to another',
 
   inputSchema: z.union([
-    moveSchema.extend({ report: z.boolean().default(false) }),
-    z.object({ moves: z.array(moveSchema).min(1), report: z.boolean().default(false) }).strict(),
+    move_schema.extend({ report: z.boolean().default(false) }),
+    z.object({ moves: z.array(move_schema).min(1), report: z.boolean().default(false) }).strict(),
   ]),
   outputSchema: z.object({
     moved_count: z.number(),

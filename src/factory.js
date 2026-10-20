@@ -203,14 +203,14 @@ async function reportDisconnect() {
 /**
  * Execute a task
  * @param {object} task
- * @param {function} getHandler
+ * @param {function} get_handler
  */
-async function executeTask(task, getHandler) {
+async function executeTask(task, get_handler) {
   const { step_queue_id, step, work_record } = task;
 
   console.log(`--- wr:${work_record.id} start`);
 
-  const handler = getHandler(step.slug);
+  const handler = get_handler(step.slug);
 
   if (!handler) {
     console.error(`[Factory] No handler for slug: ${step.slug}`);
@@ -248,13 +248,13 @@ export async function startFactory({ getHandler, callerUrl }) {
   factory_user_agent = buildUserAgent({ callerUrl });
 
   const orchestrator_url = orchestratorUrl();
-  const pollInterval = parseInt(process.env.POLL_INTERVAL_MS) || 2000;
+  const poll_interval = parseInt(process.env.POLL_INTERVAL_MS) || 2000;
 
   console.log('================================================');
   console.log('[Factory] Starting factory session...');
   console.log('[Factory] Orchestrator:', orchestrator_url);
   console.log('[Factory] Location:', process.env.FACTORY_LOCATION);
-  console.log('[Factory] Poll interval:', pollInterval, 'ms');
+  console.log('[Factory] Poll interval:', poll_interval, 'ms');
   console.log('[Factory] User-Agent:', factory_user_agent);
   console.log('================================================');
 
@@ -306,6 +306,6 @@ export async function startFactory({ getHandler, callerUrl }) {
       await executeTask(task, getHandler);
     }
 
-    await sleep(pollInterval);
+    await sleep(poll_interval);
   }
 }

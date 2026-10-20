@@ -13,7 +13,7 @@ import { getSessionId } from './factory.js';
 import { isLocalRun } from './local-run.js';
 import { orchestratorUrl } from './utils/orchestrator-url.js';
 
-const isDev = process.env.NODE_ENV === 'development';
+const is_dev = process.env.NODE_ENV === 'development';
 
 /** Resolve the temp directory for a work record. */
 function workRecordDir(work_record_id) {
@@ -42,7 +42,7 @@ function writeToLocalTemp(work_record_id, filename, content) {
  * Skipped in dev mode so files remain for inspection.
  */
 export function clearTemp(work_record_id) {
-  if (isDev) {
+  if (is_dev) {
     console.log(`[Factory] Dev: skipping temp cleanup for ${work_record_id}`);
     return;
   }
@@ -64,8 +64,8 @@ export function clearTemp(work_record_id) {
  */
 export async function attachDocument(work_record_id, title, content, step_slug) {
   // Write to local temp (just use title as filename)
-  const safeTitle = title.replace(/[^a-zA-Z0-9-_]/g, '_');
-  writeToLocalTemp(work_record_id, `${safeTitle}.md`, content);
+  const safe_title =title.replace(/[^a-zA-Z0-9-_]/g, '_');
+  writeToLocalTemp(work_record_id, `${safe_title}.md`, content);
 
   if (isLocalRun(work_record_id)) return true;
 

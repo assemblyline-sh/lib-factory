@@ -24,11 +24,11 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 // Module state - set once at factory startup
-let factoryTemplatesDir = null;
-let libTemplatesDir = null;
+let factory_templates_dir = null;
+let lib_templates_dir = null;
 
 // Template cache for production performance
-const templateCache = new Map();
+const template_cache =new Map();
 
 /**
  * Shared helpers available to all templates. Currency formatting is left to the
@@ -76,10 +76,10 @@ export function initTemplates(callerUrl) {
     dir = parent;
   }
 
-  factoryTemplatesDir = join(dir, 'templates');
+  factory_templates_dir = join(dir, 'templates');
 
   // Lib templates directory (relative to this file)
-  libTemplatesDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates');
+  lib_templates_dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates');
 }
 
 /**
@@ -101,26 +101,26 @@ export function initTemplates(callerUrl) {
  * });
  */
 export async function renderTemplate(templateName, data) {
-  if (!factoryTemplatesDir) {
+  if (!factory_templates_dir) {
     throw new Error('Templates not initialized. Pass callerUrl to startFactory().');
   }
 
-  const factoryPath = join(factoryTemplatesDir, `${templateName}.md`);
-  const libPath = join(libTemplatesDir, `${templateName}.md`);
+  const factory_path = join(factory_templates_dir, `${templateName}.md`);
+  const lib_path = join(lib_templates_dir, `${templateName}.md`);
 
   // Check cache first (in production)
-  let template = templateCache.get(factoryPath) || templateCache.get(libPath);
+  let template = template_cache.get(factory_path) || template_cache.get(lib_path);
   let templatePath;
 
   if (!template) {
     // Try factory templates first, fall back to lib
     try {
-      template = await readFile(factoryPath, 'utf-8');
-      templatePath = factoryPath;
+      template = await readFile(factory_path, 'utf-8');
+      templatePath = factory_path;
     } catch (err) {
       if (err.code === 'ENOENT') {
-        template = await readFile(libPath, 'utf-8');
-        templatePath = libPath;
+        template = await readFile(lib_path, 'utf-8');
+        templatePath = lib_path;
       } else {
         throw err;
       }
@@ -128,11 +128,11 @@ export async function renderTemplate(templateName, data) {
 
     // Cache in production
     if (process.env.NODE_ENV === 'production') {
-      templateCache.set(templatePath, template);
+      template_cache.set(templatePath, template);
     }
   } else {
     // Determine path for cached template (for EJS filename option)
-    templatePath = templateCache.has(factoryPath) ? factoryPath : libPath;
+    templatePath = template_cache.has(factory_path) ? factory_path : lib_path;
   }
 
   // Merge data with helpers
@@ -144,6 +144,6 @@ export async function renderTemplate(templateName, data) {
   // views array: factory first, then lib (for include resolution)
   return ejs.render(template, templateData, {
     filename: templatePath,
-    views: [factoryTemplatesDir, libTemplatesDir],
+    views: [factory_templates_dir, lib_templates_dir],
   });
 }
