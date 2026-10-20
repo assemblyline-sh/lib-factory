@@ -32,16 +32,16 @@ export async function updateStepMetadata(root) {
 
   let updated = 0;
   for (const { filepath, station } of files) {
-    let changed = false;
+    let has_changed = false;
     for (const step of station.steps ?? []) {
       const meta = metadata[step.slug];
       if (meta && (step.name !== meta.name || step.description !== meta.description)) {
         step.name = meta.name;
         step.description = meta.description;
-        changed = true;
+        has_changed = true;
       }
     }
-    if (changed) {
+    if (has_changed) {
       fs.writeFileSync(filepath, JSON.stringify(station, null, 2));
       console.log(`Updated: ${station.name} (${station.short_code || station.id})`);
       updated++;

@@ -19,10 +19,10 @@ let factory_user_agent = null;
 let session_id = null;
 
 /** Set when the orchestrator reports our session was deliberately closed */
-let session_closed = false;
+let is_session_closed = false;
 
 /** Set when another factory session already holds our location — retrying cannot help */
-let location_conflict = false;
+let has_location_conflict = false;
 
 /** Get the current session ID (for use by orchestrator.js helpers) */
 export function getSessionId() {
@@ -69,7 +69,7 @@ async function pollForTask() {
           // Non-JSON body — fall back to the raw text.
         }
         console.error(`[Factory] ${message}`);
-        location_conflict = true;
+        has_location_conflict = true;
         return null;
       }
 
@@ -84,7 +84,7 @@ async function pollForTask() {
     // let startFactory() exit; a process manager may restart us, and we will then
     // register a fresh session.
     if (data.session_closed) {
-      session_closed = true;
+      is_session_closed = true;
       return null;
     }
 
@@ -286,7 +286,7 @@ export async function startFactory({ getHandler, callerUrl }) {
 
     // Session closed by the orchestrator — stop. Exit 0 so a process manager
     // restarts us cleanly; we then register a fresh session.
-    if (session_closed) {
+    if (is_session_closed) {
       console.log('[Factory] Session was closed by the orchestrator. Exiting.');
       process.exit(0);
     }
@@ -294,7 +294,7 @@ export async function startFactory({ getHandler, callerUrl }) {
     // Another factory session owns this location. Exit non-zero: a restart would just be
     // refused again, so we want the process to stay down (and a supervisor's
     // restart loop to be visibly failing) rather than spin quietly.
-    if (location_conflict) {
+    if (has_location_conflict) {
       console.error(
         `[Factory] Location '${process.env.FACTORY_LOCATION}' is served by another factory session. ` +
         'Stop that session, or set a different FACTORY_LOCATION for this one. Exiting.'
