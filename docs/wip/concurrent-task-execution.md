@@ -152,11 +152,17 @@ I read through the orchestrator (poll, complete, failed, `stationStepComplete`, 
 - [x] Docs: `polling-loop.md`, `graceful-shutdown.md` (no longer claims it waits for the current task), CHANGELOG
 - [x] Release 0.36.0, git tag only, no npm (origin's tags v0.3.0 to v0.35.0 are left over from lib-worker, so 0.3.0 was taken). Factories on `^0.2.2` don't pick it up
 
-### Phase 3: Roll out ❌
-- [ ] factory-alex-mac: bump, deploy, and check that AR0 and the VM stations finish while an AR2 upload runs
+### Phase 3: Roll out 🔄
+- [x] Audit factory-alex-mac steps for state shared across steps. Nothing found: each intake registry and `input.txt` belongs to one station, scratch folders come from `mkdtemp`, the backlog git commits are synchronous (`execFileSync`), and module state is only the yt-dlp version cache
+- [x] 0.36.1: shutdown waits at most 500 ms for a poll in flight. pm2 sends SIGKILL 1.6 s after SIGINT (default `kill_timeout`), and the first version's 3 s wait could keep the disconnect from leaving
+- [x] factory-alex-mac on 0.36.1 (`985b259`), restarted 2026-10-24 03:17 (`pm2 restart`). The old 0.2.0 session ended `disconnected`; VM3 run `bLMuP2ax2mBV` had step 1 completed by the old session and step 2 by the new one (`LC50Si3pcknz`). Its tests pass except `openrouter-whisper.test.js` (expects `filename` in the request body, the code sends `audio_filename`), which fails on 0.2.0 too
+- [ ] Check that other stations finish while an AR2 upload runs. AR2 gets no new runs until run `P1PsqIJXtHuQ` is timed out (around 04:57) or cancelled. Its step was claimed at 00:57:36 and the process got SIGINT right after starting it; its session ended `expired`, not `disconnected`, so that disconnect never arrived. This was a restart stranding a claim, seen live, before the release existed
+- [ ] Restart while an AR2 upload runs; check `run.step.released` in its activity and that the upload starts again
 - [ ] Watch for a week: event-loop delay (item 6) and machine load (item 7)
 - [ ] Decide whether to remove AR2's `batch_size: 1`
-- [ ] Other factories (`/bump-dependents`)
+- [ ] Other factories (`/bump-dependents`), and publish to npm (`npm login` needed)
+
+**Seen during rollout:** of the four restarts in the log before 0.36.1, two disconnects never reached the orchestrator. The release on disconnect covers a restart only when the disconnect arrives. Lost disconnects, like lost reports, are part of the follow-up above.
 
 ## Related Files
 
