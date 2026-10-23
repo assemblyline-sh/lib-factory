@@ -1,18 +1,26 @@
 # Graceful Shutdown
 
-A factory session registers handlers for `SIGTERM` and `SIGINT` signals.
+A factory session registers handlers for `SIGTERM` and `SIGINT` (pm2 sends `SIGINT` on
+restart).
 
 ## Behavior
 
-1. Sets flag to stop polling loop
-2. Waits for current task to complete (if any)
-3. Exits cleanly
+1. Stops polling, and waits for a poll in flight (at most 3 seconds)
+2. POST `/api/factory/disconnect`, which frees the location and puts the tasks still
+   running back to `pending`
+3. Exits. Tasks still running stop with the process
+
+The next session empties every `doing/` bin at boot, claims the released tasks and redoes
+their work from `input/`. The same disconnect runs when the orchestrator closes the session.
 
 ## Why It Matters
 
-- Prevents task abandonment during deploys
-- Allows in-flight work to complete
-- Orchestrator won't see task as timed out
+- A restart doesn't leave runs `running` until the orchestrator's 240-minute timeout, and
+  their stations get new runs straight away
+- The location is free for the restarted session immediately, not after the 5-minute expiry
+
+A crash (`kill -9`, power loss) sends no disconnect: its tasks stay claimed until the
+timeout.
 
 ## Related Notes
 

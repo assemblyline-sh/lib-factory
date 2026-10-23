@@ -31,9 +31,11 @@ export function getSessionId() {
 
 /**
  * Poll the orchestrator for a task
+ * @param {string[]} excluded_steps - Slugs of the steps this session is running now;
+ *   the orchestrator does not hand out another task of these steps
  * @returns {Promise<object|null>}
  */
-async function pollForTask() {
+async function pollForTask(excluded_steps) {
   const url = orchestratorUrl();
 
   const headers = {
@@ -47,6 +49,9 @@ async function pollForTask() {
   }
   if (session_id) {
     headers['X-Factory-Session'] = session_id;
+  }
+  if (excluded_steps.length > 0) {
+    headers['X-Exclude-Steps'] = excluded_steps.join(',');
   }
 
   try {
@@ -129,10 +134,10 @@ async function reportComplete(step_queue_id, output) {
 
     if (!response.ok) {
       const error = await response.text();
-      console.error('[Factory] Complete report failed:', response.status, error);
+      console.error(`[Factory] Complete report failed (task ${step_queue_id}):`, response.status, error);
     }
   } catch (error) {
-    console.error('[Factory] Complete report error:', error.message);
+    console.error(`[Factory] Complete report error (task ${step_queue_id}):`, error.message);
   }
 }
 
@@ -163,10 +168,10 @@ async function reportFailed(step_queue_id, error, retryable = true) {
 
     if (!response.ok) {
       const err = await response.text();
-      console.error('[Factory] Failed report failed:', response.status, err);
+      console.error(`[Factory] Failed report failed (task ${step_queue_id}):`, response.status, err);
     }
   } catch (err) {
-    console.error('[Factory] Failed report error:', err.message);
+    console.error(`[Factory] Failed report error (task ${step_queue_id}):`, err.message);
   }
 }
 
@@ -213,7 +218,7 @@ async function executeTask(task, get_handler) {
   const handler = get_handler(step.slug);
 
   if (!handler) {
-    console.error(`[Factory] No handler for slug: ${step.slug}`);
+    console.error(`[Factory] wr:${work_record.id} No handler for slug: ${step.slug}`);
     console.log(`--- wr:${work_record.id} failed`);
     await reportFailed(step_queue_id, `Unknown slug: ${step.slug}`, false);
     return;
@@ -224,7 +229,7 @@ async function executeTask(task, get_handler) {
     console.log(`--- wr:${work_record.id} done`);
     await reportComplete(step_queue_id, output);
   } catch (error) {
-    console.error(`[Factory] error: ${error.message}`);
+    console.error(`[Factory] wr:${work_record.id} [${step.slug}] error: ${error.message}`);
     console.log(`--- wr:${work_record.id} failed`);
     await reportFailed(step_queue_id, error.message, true);
   }
@@ -266,14 +271,30 @@ export async function startFactory({ getHandler, callerUrl }) {
     for (const o of orphans) console.log(`[Factory]   - ${o}`);
   }
 
+  // Tasks running now, by step slug. Each poll sends the slugs as exclusions, so
+  // steps run side by side but no step runs twice at once: two tasks of one
+  // station's step would pick up the same workpieces from its input bin.
+  /** @type {Map<string, string>} step slug → step_queue_id */
+  const running_tasks = new Map();
+
+  /** The poll in flight, so shutdown can wait for it before disconnecting */
+  let current_poll = null;
+
   // Handle graceful shutdown. Announce departure so the orchestrator can free
   // this location immediately rather than waiting out the 5-minute expiry —
   // pm2 sends SIGINT on restart, so this is the common path, not the rare one.
+  // The orchestrator also puts the steps still running back to pending, so the
+  // next session runs them again. Wait for a poll in flight first: a claim it
+  // makes after the disconnect would not be released.
   let shutting_down = false;
   const shutdown = async (signal) => {
     if (shutting_down) return;
     shutting_down = true;
     console.log(`[Factory] Received ${signal}, shutting down...`);
+    if (running_tasks.size > 0) {
+      console.log(`[Factory] Stopping with ${running_tasks.size} task(s) running: ${[...running_tasks.keys()].join(', ')}`);
+    }
+    await Promise.race([current_poll, sleep(3000)]);
     await reportDisconnect();
     process.exit(0);
   };
@@ -281,13 +302,21 @@ export async function startFactory({ getHandler, callerUrl }) {
   process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
   process.on('SIGINT', () => { void shutdown('SIGINT'); });
 
-  while (true) {
-    const task = await pollForTask();
+  while (!shutting_down) {
+    current_poll = pollForTask([...running_tasks.keys()]);
+    const task = await current_poll;
+
+    // Shutdown began while the poll was in flight. Don't start the task: the
+    // disconnect puts it back to pending.
+    if (shutting_down) return;
 
     // Session closed by the orchestrator — stop. Exit 0 so a process manager
-    // restarts us cleanly; we then register a fresh session.
+    // restarts us cleanly; we then register a fresh session. The disconnect puts
+    // the tasks still running back to pending (the session is already closed,
+    // so that is all it does).
     if (is_session_closed) {
       console.log('[Factory] Session was closed by the orchestrator. Exiting.');
+      await reportDisconnect();
       process.exit(0);
     }
 
@@ -302,8 +331,12 @@ export async function startFactory({ getHandler, callerUrl }) {
       process.exit(1);
     }
 
+    // Start the task without waiting for it, and keep polling: other stations'
+    // steps run while this one does.
     if (task) {
-      await executeTask(task, getHandler);
+      const slug = task.step.slug;
+      running_tasks.set(slug, task.step_queue_id);
+      executeTask(task, getHandler).finally(() => running_tasks.delete(slug));
     }
 
     await sleep(poll_interval);

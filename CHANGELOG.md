@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- A factory session runs tasks of different steps side by side. It starts each claimed task
+  without waiting for it and keeps polling, so a long step (a multi-GB upload) no longer
+  holds up every other station. A step still never runs two tasks at once: each poll sends
+  the running slugs as `X-Exclude-Steps`. Requires the Orchestrator that reads that header
+  (deployed 2026-10-24); an older one would hand out a second task of a running step.
+- Shutdown waits for a poll in flight before disconnecting, and the session also disconnects
+  when the orchestrator closes it, so the orchestrator puts the tasks still running back to
+  `pending`.
+- Error lines name the work record and step (`[Factory] wr:{id} [{slug}] error: ...`), and
+  report errors name the task, since tasks now interleave in the log.
+
 ## [0.2.2] - 2026-10-19
 
 ### Fixed
