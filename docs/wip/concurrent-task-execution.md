@@ -156,11 +156,11 @@ I read through the orchestrator (poll, complete, failed, `stationStepComplete`, 
 - [x] Audit factory-alex-mac steps for state shared across steps. Nothing found: each intake registry and `input.txt` belongs to one station, scratch folders come from `mkdtemp`, the backlog git commits are synchronous (`execFileSync`), and module state is only the yt-dlp version cache
 - [x] 0.36.1: shutdown waits at most 500 ms for a poll in flight. pm2 sends SIGKILL 1.6 s after SIGINT (default `kill_timeout`), and the first version's 3 s wait could keep the disconnect from leaving
 - [x] factory-alex-mac on 0.36.1 (`985b259`), restarted 2026-10-24 03:17 (`pm2 restart`). The old 0.2.0 session ended `disconnected`; VM3 run `bLMuP2ax2mBV` had step 1 completed by the old session and step 2 by the new one (`LC50Si3pcknz`). Its tests pass except `openrouter-whisper.test.js` (expects `filename` in the request body, the code sends `audio_filename`), which fails on 0.2.0 too
-- [ ] Check that other stations finish while an AR2 upload runs. AR2 gets no new runs until run `P1PsqIJXtHuQ` is timed out (around 04:57) or cancelled. Its step was claimed at 00:57:36 and the process got SIGINT right after starting it; its session ended `expired`, not `disconnected`, so that disconnect never arrived. This was a restart stranding a claim, seen live, before the release existed
+- [ ] Check that other stations finish while an AR2 upload runs. Run `P1PsqIJXtHuQ` blocked AR2 and was cancelled by hand at 03:26 (the first attempt hit `fetch failed`). Its step was claimed at 00:57:36 and the process got SIGINT right after starting it; its session ended `expired`, not `disconnected`, so that disconnect never arrived. This was a restart stranding a claim, seen live, before the release existed
 - [ ] Restart while an AR2 upload runs; check `run.step.released` in its activity and that the upload starts again
-- [ ] Watch for a week: event-loop delay (item 6) and machine load (item 7)
+- [ ] Watch event-loop delay (item 6) and machine load (item 7). Decided 2026-10-24 to move every factory now rather than after a week on factory-alex-mac
 - [ ] Decide whether to remove AR2's `batch_size: 1`
-- [ ] Other factories (`/bump-dependents`), and publish to npm (`npm login` needed)
+- [ ] Other factories (`/bump-dependents`): factory-alex, factory-actual, factory-chisel (git tag `#v0.2.0`), factory-tech, factory-vrudhijain, factory-template (npm `^0.2.2`). On 2026-10-24 03:30 alex-linux-pc was unreachable (SSH timed out) and every session there had been `disconnected` since 2026-10-23 21:16, so their restarts wait for the PC: `unison ec2code -path <folder>`, then `ssh alex@alex-linux-pc 'pm2 restart <process>'`
 
 **Seen during rollout:** of the four restarts in the log before 0.36.1, two disconnects never reached the orchestrator. The release on disconnect covers a restart only when the disconnect arrives. Lost disconnects, like lost reports, are part of the follow-up above.
 
