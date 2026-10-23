@@ -16,7 +16,7 @@ Standards read: `principles/solve-problems-you-have-seen.md`, `principles/try-it
 while (true) {
   const task = await pollForTask();             // GET /api/factory/poll
   if (task) await executeTask(task, getHandler); // runs the step to the end
-  await sleep(pollInterval);                     // POLL_INTERVAL_MS, default 2000
+  await sleep(poll_interval);                     // POLL_INTERVAL_MS, default 2000
 }
 ```
 
