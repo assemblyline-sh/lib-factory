@@ -1,8 +1,8 @@
 # Concurrent Task Execution in a Factory Session
 
-## Status: EVALUATION
+## Status: NOT STARTED (design chosen: per-step exclusion)
 
-A factory session runs one task at a time. While one long step runs (a multi-GB upload, a long transcription), every other station on that location waits, the session stops polling, and the orchestrator times out runs queued behind it. This WIP records how the session works today, the evidence that it now hurts, the constraints any fix must keep, and the options for letting stations share the session so one station can't block the rest.
+A factory session runs one task at a time. While one long step runs (a multi-GB upload, a long transcription), every other station on that location waits, the session stops polling, and the orchestrator times out runs queued behind it. This WIP records how the session works today, the evidence that it now hurts, and the chosen fix. The session runs a task of each step slug at the same time. It tells the orchestrator which slugs are busy, so no step ever runs twice at once. The WIP also lists what reading the code turned up.
 
 Standards read: `principles/solve-problems-you-have-seen.md`, `principles/try-it-to-decide.md`, `principles/abstraction-earns-its-keep.md`, `git-workflow/wip-files.md`. Related decision: orchestrator `docs/decisions/0001-one-active-worker-session-per-location.md` (D1).
 
@@ -56,96 +56,96 @@ Stop-gap applied in factory-alex-mac: AR2 `batch_size: 1`, so a run moves one fi
 
 ## Constraints Any Fix Must Keep
 
-1. **D1: one active session per (org, location).** Workpiece bundles live on the session's own disk (`process.cwd()/temp/stations`). Adding processes at one location breaks step-to-step locality. Concurrency has to happen **inside** the one session, or across **distinct** locations.
-2. **One task per station at a time.** Two tasks of the same station would read the same `input/` bin and process the same workpiece twice (`processWorkpiece` copies `input → doing` and does not lock). Today the serial loop guarantees this; cron and watchers mostly guarantee it at the run level, manual runs don't.
-3. **Steps of one run stay in order.** Already true: the orchestrator queues step N+1 only after step N completes.
-4. **Crash recovery stays correct.** `cleanupOrphanedDoing()` runs at boot and discards every station's `doing/` bin. With several tasks in flight, a restart interrupts all of them, and recovery is still "redo from `input/`".
-5. **Event loop stays free.** In-process concurrency only helps steps that `await`. A step doing long synchronous CPU work (big `readFileSync` + parse, a synchronous directory walk, hashing) blocks every other task in the process.
+1. **D1: one active session per (org, location).** Workpiece bundles live on the session's own disk (`process.cwd()/temp/stations`). Concurrency has to happen **inside** the one session.
+2. **Never two tasks of the same step at once.** Two runs of one station's processing step would read the same `input/` bin and process the same workpiece twice (`processWorkpiece` copies `input → doing` and does not lock). An `rclone move` step run twice would upload the same file twice. Today the serial loop guarantees this. Cron and watchers also skip a station with a run in flight (`hasInFlightRun`), but manual runs don't.
+3. **Steps of one run stay in order.** Already true: the orchestrator queues step N+1 only after step N completes (`stationStepComplete.js`).
+4. **Crash recovery stays correct.** `cleanupOrphanedDoing()` discards every `doing/` bin at boot. The next run redoes the work from `input/`.
 
-## Options
+## Design: Each Step Runs on Its Own, One at a Time
 
-### A. Keep the serial loop; tune stations (today)
+This works like a real assembly line: each station works on its item as fast as it can, whatever is happening at the other stations. A step never runs alongside another task of the same step.
 
-Small batches for long steps (`batch_size: 1`), short steps everywhere else.
+**Factory (`src/factory.js`).** The session keeps the tasks it is running, keyed by step slug. Each poll sends those slugs as exclusions. A claimed task starts without the loop waiting for it, and its slug comes off the list when it finishes.
 
-- **For:** no code change.
-- **Against:** the wait is bounded by the longest single item. Polling and the heartbeat still stop; runs still time out after 30 minutes pending.
+```js
+const running = new Map();                           // step slug → step_queue_id
+while (true) {
+  const task = await pollForTask([...running.keys()]); // X-Exclude-Steps: slug,slug
+  if (task) {
+    running.set(task.step.slug, task.step_queue_id);   // before the next poll
+    executeTask(task, getHandler).finally(() => running.delete(task.step.slug));
+  }
+  await sleep(poll_interval);
+}
+```
 
-### B. Separate sessions per line, using distinct locations (works today)
+**Orchestrator (`src/app/api/factory/poll/route.js`).** The claim query gets one more condition, added only when the list is non-empty: `AND step_slug NOT IN (:excluded_steps)`. Otherwise it still takes the oldest pending step at the location.
 
-Run a second session from the same repo (a second pm2 process) with its own `FACTORY_LOCATION` (e.g. `alexs-mbp-16-archive`), and move the line's `location` there.
+Why this is enough:
 
-- **For:** no library change. Both sessions share one filesystem (same repo, same `temp/`), so D1's locality problem doesn't arise as long as each line lives in one location.
-- **Against:**
-  - **`cleanupOrphanedDoing()` sweeps every station's `doing/` at boot**, including the other session's in-flight work. It would need scoping to the session's own stations (`resolveWatchedStations` already knows which stations belong to the location). The temp pruner has the same "all stations" scope.
-  - Both sessions start their own bin and intake watchers over every watched station unless scoped.
-  - More processes and locations to run and monitor; fairness inside each session is still serial.
+- **The key is the step slug, which every poll response already carries** (`task.step.slug`). No station id or schema change is needed.
+- **Every bin is safe.** A station's `doing/` bin is touched only by that station's processing step, and in factory-alex-mac each processing slug belongs to exactly one station (`AR2_01_move_to_b2`, `VM3_01_transcribe_whisper`, ...). Promotions between bins are `renameSync`, so a conveyor never sees half a workpiece.
+- **No slot cap.** The number of tasks in flight is bounded by the number of distinct step slugs.
+- **No heartbeat endpoint.** The loop keeps polling while tasks run, so a busy session never goes quiet and never expires. The old option C needed a poll that doesn't claim only because full slots stopped the polling.
+- **The factory decides what to exclude, not the orchestrator.** The orchestrator could work it out from its own `claimed` rows, but a lost `/complete` call (`reportComplete` swallows network errors, and `Poll error: fetch failed` was seen) would then block that slug for the whole session. The factory's list matches what is actually running.
+- **Manual runs are covered as well.** A manual run of a busy station now waits for the running one instead of overlapping it. Today it overlaps.
 
-### C. In-process concurrent execution (recommended direction)
+## Found in the Code (2026-10-24)
 
-One session runs several tasks at once:
+I read through the orchestrator (poll, complete, failed, `stationStepComplete`, reaper, session expiry) and lib-factory plus factory-alex-mac to find problems this change causes or makes worse.
 
-1. **Decouple the poll from execution.** A dispatcher keeps polling every `POLL_INTERVAL_MS` while tasks run; each claimed task starts without awaiting the previous one.
-2. **Slots.** A cap on concurrent tasks (`FACTORY_MAX_CONCURRENT_TASKS`, default `1` = today's behaviour). When all slots are full, the session must keep its heartbeat but must not claim. Today the poll always claims, so this needs either a heartbeat-only poll (e.g. `?claim=false`, or a capacity header) or a separate heartbeat endpoint on the orchestrator.
-3. **Per-station exclusivity.** Never run two tasks of the same station at once. Two ways:
-   - Orchestrator: the claim query skips steps whose station already has a `claimed` step at the location. Keeps FIFO otherwise; no task is held locally. Needs `station` on `step_queue` or a join to `work_records`.
-   - Factory: hold a claimed task until its station is free. Simpler on the orchestrator side, but a held task counts against the 30-minute pending reaper and occupies a claim. The poll response would need the station id (`lib-factory:move_files` is shared across stations, so the slug isn't enough).
-4. **Fairness.** With slots and per-station exclusivity, a long station uses one slot and everything else keeps moving. If several long stations exist, a cap per "lane" (e.g. a station flag `long_running: true` limited to N slots) could be added **when seen**, not now.
-5. **Shutdown.** On SIGINT/SIGTERM, stop claiming and either wait for in-flight tasks (bounded) or exit and rely on orphan cleanup. `docs/architecture/graceful-shutdown.md` already claims "waits for current task" but `startFactory` calls `process.exit(0)` immediately; fix the doc or the code as part of this.
-6. **Logs.** Interleaved output from several tasks. `--- wr:{id} start/done` markers exist; step logs carry a `[slug]` prefix. Probably enough; check in practice.
+**Caused or made worse by this change: fix as part of it**
 
-- **For:** fits D1 (one process, one filesystem). Default `1` keeps today's behaviour, so factories opt in. Most steps are I/O-bound, so a single event loop handles several at once.
-- **Against:** needs orchestrator changes (heartbeat without claim; station-exclusive claim). A step with synchronous CPU work still blocks everyone, now including concurrent tasks. Any module-level mutable state in a factory's steps becomes shared across concurrent tasks; it needs an audit.
+1. **A restart strands every task in flight.** No job resets `claimed` rows (only the cancel route and the 240-minute reaper touch them). After `pm2 restart`, which is also how changes are deployed, each run that was in flight stays `running` until the reaper times it out at 240 minutes. Until then `hasInFlightRun` stops cron and the watchers from starting that station. This already happens today with one task, and it may explain the VM2 to VM5 `running > 240 min` rows above. With concurrency it hits every busy station at once. **Fix (orchestrator):** `/api/factory/disconnect`, which the factory already calls on SIGINT/SIGTERM, also puts that session's `claimed` steps back to `pending` (`claimed_at` and `factory_session` cleared, `retry_count` unchanged). The restarted session claims them again, and because the orphan cleanup at boot emptied `doing/`, the step redoes the work from `input/`. The factory needs no change. A crash (no disconnect) is not covered: those claims still wait for the 240-minute reaper. Releasing them when a session expires is unsafe today, because a session expires after 5 quiet minutes even while its step is still running (a sync block, a network outage). Revisit when a crash is seen.
+2. **An old orchestrator ignores the exclusions.** A new lib-factory polling an orchestrator without this change would claim the same step twice. **Order:** deploy the orchestrator first, then release lib-factory. There is one hosted orchestrator, so the order is enough.
+3. **An empty exclusion list breaks the SQL.** `NOT IN ()` is invalid, so the clause must be added only when the list has slugs.
+4. **Error logs don't say which task failed.** `executeTask` logs `[Factory] error: <message>` with no work record id or slug. Once tasks interleave, a failure can't be traced to its task. Add `wr:{id} [slug]` to that line. Nothing parses the `--- wr:` markers (I checked al-control, control-room and lib-factory), so interleaved output breaks no tool. Interleaving does break the readable `start … done` blocks that factory-alex's `docs/wip/worker-log-cleanup-target.md` takes as its target layout, so update that WIP when this ships.
 
-### D. A child process per task (extension of C)
+**Accepted for now, revisit when seen**
 
-Run each task in a forked Node process (or `worker_threads`), with the session as dispatcher.
+5. **`lib-factory:move_files` is one slug for 11 stations.** All conveyors at the location run one after another. They are renames that take seconds, so this is acceptable. If it ever matters, key the exclusion by station and slug (the poll response would then need the station).
+6. **Synchronous calls block the whole process.** There are `execFileSync` calls (`gh`, `git` in the BL and RR utils, `stat` in `icloud-guard.js`) and `readdirSync` walks (AR0, AR1, backlog utils). They delay other tasks but don't break them. Measure event-loop delay before doing anything about it.
+7. **Competition for the machine.** Whisper (VM3), yt-dlp (Y1, M1) and rclone (AR2) can now run at the same time and compete for CPU, memory and bandwidth. This hasn't been seen yet. If it is, group heavy steps under a shared key.
+8. **Module-level state is benign.** In factory-alex-mac it is only `_version_cache` (the yt-dlp version) in `youtube-audio.js` and `youtube-video.js`, and constant `Set`s. In lib-factory it is the session flags and the templates dir, set once at startup.
 
-- **For:** CPU-heavy or crashing steps can't stall or kill the session; a stuck task can be killed on timeout.
-- **Against:** more machinery (IPC for `attachReport` etc. or re-auth per child, startup cost per task). Worth it only if C shows CPU-bound steps blocking the loop.
+**Already true today, not caused by this change (proposals, out of scope)**
 
-### E. Detached long work inside a station (pattern, no library change)
+- `/api/factory/complete` doesn't check whether the step was cancelled or the run timed out. A late completion still marks it `completed` and queues the next step.
+- `/api/factory/failed` resets a retryable step to `pending` with no backoff, so it can be claimed again on the next poll.
 
-A step starts the long job in the background (e.g. a detached `rclone`), records it in the workpiece, and returns; a later run checks completion and finishes the workpiece.
+## Considered and Set Aside
 
-- **For:** no platform change; the long job doesn't hold the session at all.
-- **Against:** every long-running station has to reimplement start/poll/finish and crash recovery; the work record no longer covers the real work. A per-station workaround, not a platform answer.
+- **A. Small batches (`batch_size: 1`).** This is the stop-gap in place. The wait is still as long as the longest single item.
+- **B. A second session with its own location.** No library change, but `cleanupOrphanedDoing()` and the watchers would need scoping per session, and there would be more processes to run.
+- **C as first written: N slots and poll whenever a slot is free.** This needs a cap, a poll that doesn't claim (for the heartbeat while slots are full) and a separate per-station exclusivity mechanism. The per-step exclusion design gives the same result without any of the three.
+- **D. A child process per task.** Only worth it if synchronous CPU work (item 6) turns out to block the loop.
+- **E. Detached long jobs inside a station.** Every long station would have to reimplement start, poll and finish.
 
-## Questions To Answer By Trying (not on paper)
+## Implementation Phases
 
-- How many steps across the factories do long synchronous CPU work? Measure event-loop delay (`perf_hooks.monitorEventLoopDelay`) per step in a real session before choosing between C and D.
-- Does a factory step keep module-level mutable state that would break under concurrency? Grep and run two stations at once in a dev session.
-- How often do manual runs overlap a cron or watcher run of the same station? Decides whether per-station exclusivity must live in the orchestrator.
-- What caused the VM2 to VM5 runs that hit the 240-minute limit? It may be the same serial-loop effect, or something else.
+### Phase 1: Orchestrator ❌
+- [ ] Poll reads `X-Exclude-Steps` (comma-separated slugs) and adds `AND step_slug NOT IN (...)` when non-empty
+- [ ] `/api/factory/disconnect` resets the session's `claimed` steps to `pending` (item 1)
+- [ ] Test: an excluded slug is skipped and the next-oldest pending step is claimed; an empty or missing header behaves as today
+- [ ] Deploy (`ship`)
 
-## Implementation Phases (if C is chosen)
+### Phase 2: lib-factory ❌
+- [ ] `running` map; `pollForTask(excluded_steps)` sends the header; `executeTask` runs without the loop waiting for it
+- [ ] Error log line carries `wr:{id} [slug]`
+- [ ] Tests: two different slugs run at once; the same slug never overlaps
+- [ ] Docs: `polling-loop.md`, `graceful-shutdown.md` (it says the session "waits for current task", which the code has never done), CHANGELOG; release
 
-### Phase 1: Decide ❌
-- [ ] Measure event-loop delay and step durations in factory-alex-mac and factory-alex for a day
-- [ ] Choose C (with or without D) and record it as a decision (lib-factory `docs/decisions/`), referencing D1
-
-### Phase 2: Orchestrator ❌
-- [ ] Heartbeat without claiming (poll parameter or separate endpoint) so a busy session never expires
-- [ ] Station-exclusive claim (skip steps whose station has a `claimed` step at the location)
-- [ ] Return the station id with each task
-
-### Phase 3: lib-factory ❌
-- [ ] Dispatcher: poll loop independent of execution, `FACTORY_MAX_CONCURRENT_TASKS` slots (default 1)
-- [ ] Heartbeat while all slots are busy
-- [ ] Shutdown: stop claiming; decide wait-vs-exit; align `graceful-shutdown.md` with the code
-- [ ] Tests: two stations run concurrently; same station never overlaps; slot cap respected
-- [ ] CHANGELOG and docs (`polling-loop.md`, `start-factory.md`, `environment-variables.md`)
-
-### Phase 4: Roll out ❌
-- [ ] factory-alex-mac: audit steps for module-level state and synchronous CPU work; set slots to 3; watch for a week
-- [ ] Remove AR2's `batch_size: 1` stop-gap if no longer needed
-- [ ] Other factories one at a time
+### Phase 3: Roll out ❌
+- [ ] factory-alex-mac: bump, deploy, and check that AR0 and the VM stations finish while an AR2 upload runs
+- [ ] Watch for a week: event-loop delay (item 6) and machine load (item 7)
+- [ ] Decide whether to remove AR2's `batch_size: 1`
+- [ ] Other factories (`/bump-dependents`)
 
 ## Related Files
 
 - `src/factory.js`: session loop, `pollForTask`, `executeTask`, shutdown
-- `src/bin-watcher.js`, `src/intake-watcher.js`, `src/utils/bin-watch-trigger.js`: watchers and `hasInFlightRun`
 - `src/utils/workpiece-station.js`: `processWorkpiece`, `cleanupOrphanedDoing`
+- `src/utils/bin-watch-trigger.js`: `hasInFlightRun`
 - `docs/architecture/polling-loop.md`, `docs/architecture/graceful-shutdown.md`
-- Orchestrator: `src/app/api/factory/poll/route.js`, `src/jobs/stationStepComplete.js`, `src/jobs/expireFactorySessions.js`, `src/jobs/reapStuckStations.js`, `src/jobs/runScheduledStation.js`, `docs/decisions/0001-one-active-worker-session-per-location.md`
+- Orchestrator: `src/app/api/factory/poll/route.js`, `src/app/api/factory/complete/route.js`, `src/app/api/factory/failed/route.js`, `src/jobs/stationStepComplete.js`, `src/jobs/reapStuckStations.js`, `src/jobs/expireFactorySessions.js`, `docs/decisions/0001-one-active-worker-session-per-location.md`
 - Evidence: factory-alex-mac `docs/wip/b2-archive-line.md` ("Seen Problems")
