@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.36.1] - 2026-10-24
+
+### Fixed
+- Shutdown waits at most 500 ms for a poll in flight (was 3 s). pm2 sends `SIGKILL` 1.6 s
+  after `SIGINT` by default, so a longer wait could stop the disconnect from leaving, and the
+  orchestrator would not release the tasks still running.
+
 ## [0.36.0] - 2026-10-24
 
 The version follows 0.2.2: the tags v0.3.0 to v0.35.0 on this repo are left over from

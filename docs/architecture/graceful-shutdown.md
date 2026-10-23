@@ -5,7 +5,8 @@ restart).
 
 ## Behavior
 
-1. Stops polling, and waits for a poll in flight (at most 3 seconds)
+1. Stops polling, and waits for a poll in flight (at most 500 ms: pm2 sends `SIGKILL`
+   1.6 s after `SIGINT` by default, and the disconnect has to leave before that)
 2. POST `/api/factory/disconnect`, which frees the location and puts the tasks still
    running back to `pending`
 3. Exits. Tasks still running stop with the process

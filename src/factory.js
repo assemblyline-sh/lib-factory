@@ -284,8 +284,10 @@ export async function startFactory({ getHandler, callerUrl }) {
   // this location immediately rather than waiting out the 5-minute expiry —
   // pm2 sends SIGINT on restart, so this is the common path, not the rare one.
   // The orchestrator also puts the steps still running back to pending, so the
-  // next session runs them again. Wait for a poll in flight first: a claim it
-  // makes after the disconnect would not be released.
+  // next session runs them again. Wait briefly for a poll in flight first: a claim
+  // it makes after the disconnect would not be released. Briefly, because pm2
+  // sends SIGKILL 1.6 s after SIGINT (its default kill_timeout), and a disconnect
+  // that never leaves releases nothing.
   let shutting_down = false;
   const shutdown = async (signal) => {
     if (shutting_down) return;
@@ -294,7 +296,7 @@ export async function startFactory({ getHandler, callerUrl }) {
     if (running_tasks.size > 0) {
       console.log(`[Factory] Stopping with ${running_tasks.size} task(s) running: ${[...running_tasks.keys()].join(', ')}`);
     }
-    await Promise.race([current_poll, sleep(3000)]);
+    await Promise.race([current_poll, sleep(500)]);
     await reportDisconnect();
     process.exit(0);
   };
