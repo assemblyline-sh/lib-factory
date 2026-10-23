@@ -1,6 +1,6 @@
 # Concurrent Task Execution in a Factory Session
 
-## Status: IN PROGRESS (~90%)
+## Status: IN PROGRESS (~95%) — shipped everywhere; two follow-ups open
 
 A factory session runs one task at a time. While one long step runs (a multi-GB upload, a long transcription), every other station on that location waits, the session stops polling, and the orchestrator times out runs queued behind it. This WIP records how the session works today, the evidence that it now hurts, and the chosen fix. The session runs a task of each step slug at the same time. It tells the orchestrator which slugs are busy, so no step ever runs twice at once. The WIP also lists what reading the code turned up.
 
@@ -59,7 +59,7 @@ All four were claimed by session `UacnLsx-cTKs`, which ran without a restart fro
 - **Lost completion report (VM2, VM3, VM5).** The factory log shows each conveyor step `done`, but the orchestrator has no `run.step.completed`. `reportComplete` logs a network error and gives up. The step stays `claimed`, so the run stays `running`. The error log has 23 `Complete report error: fetch failed` and 1 `Complete report failed: 522` (Cloudflare connection timed out).
 - **Lost poll response (VM4).** The orchestrator logged `run.step.claimed` for `VM4_01_clean_whisper` at 17:53:26, but the factory log never shows that task starting. The claim committed and the response never reached the factory, which saw `Poll error: fetch failed` (352 such lines in the error log).
 
-In both cases nothing ever puts the `claimed` step back. The run waits for the 240-minute reaper, and until then `hasInFlightRun` stops cron and the watchers from starting that station. Session `UacnLsx-cTKs` stranded 10 steps this way (8 `move_files`, 1 VM4, 1 VM5). A restart strands claims by the same mechanism, but none was seen here.
+In both cases nothing ever puts the `claimed` step back. The run waits for the 240-minute reaper, and until then `hasInFlightRun` stops cron and the watchers from starting that station. Session `UacnLsx-cTKs` stranded 10 steps this way (8 `move_files`, 1 VM4, 1 VM5). Out of scope here (see Out of Scope).
 
 Stop-gap applied in factory-alex-mac: AR2 `batch_size: 1`, so a run moves one file and other stations get a turn between files. The longest wait is still one file's upload.
 
@@ -103,67 +103,56 @@ Why this is enough:
 
 I read through the orchestrator (poll, complete, failed, `stationStepComplete`, reaper, session expiry) and lib-factory plus factory-alex-mac to find problems this change causes or makes worse.
 
-**Caused or made worse by this change: fix as part of it**
+**Caused by this change: fixed as part of it**
 
-1. **A restart strands every task in flight.** No job resets `claimed` rows (only the cancel route and the 240-minute reaper touch them). After `pm2 restart`, which is also how changes are deployed, each run that was in flight stays `running` until the reaper times it out at 240 minutes. Until then `hasInFlightRun` stops cron and the watchers from starting that station. This already happens today with one task, and it may explain the VM2 to VM5 `running > 240 min` rows above. With concurrency it hits every busy station at once. **Fix (orchestrator):** `/api/factory/disconnect`, which the factory already calls on SIGINT/SIGTERM, also puts that session's `claimed` steps back to `pending` (`claimed_at` and `factory_session` cleared, `retry_count` unchanged). The restarted session claims them again, and because the orphan cleanup at boot emptied `doing/`, the step redoes the work from `input/`. The factory needs no change. A crash (no disconnect) is not covered: those claims still wait for the 240-minute reaper. Releasing them when a session expires is unsafe today, because a session expires after 5 quiet minutes even while its step is still running (a sync block, a network outage). Revisit when a crash is seen.
-2. **An old orchestrator ignores the exclusions.** A new lib-factory polling an orchestrator without this change would claim the same step twice. **Order:** deploy the orchestrator first, then release lib-factory. There is one hosted orchestrator, so the order is enough.
-3. **An empty exclusion list breaks the SQL.** `NOT IN ()` is invalid, so the clause must be added only when the list has slugs.
-4. **Error logs don't say which task failed.** `executeTask` logs `[Factory] error: <message>` with no work record id or slug. Once tasks interleave, a failure can't be traced to its task. Add `wr:{id} [slug]` to that line. Nothing parses the `--- wr:` markers (I checked al-control, control-room and lib-factory), so interleaved output breaks no tool. Interleaving does break the readable `start … done` blocks that factory-alex's `docs/wip/worker-log-cleanup-target.md` takes as its target layout, so update that WIP when this ships.
+1. **An old orchestrator ignores the exclusions.** A new lib-factory polling an orchestrator without this change would claim the same step twice. Order: orchestrator first, then lib-factory.
+2. **An empty exclusion list breaks the SQL.** `NOT IN ()` is invalid, so the clause is added only when the list has slugs.
+3. **Error lines don't say which task failed.** Once tasks interleave, `[Factory] error: <message>` can't be traced to a task, so it now carries `wr:{id} [slug]` and report errors carry the task id. Nothing parses the `--- wr:` markers (checked al-control, control-room, lib-factory). Interleaving does break the readable `start … done` blocks that factory-alex's `docs/wip/worker-log-cleanup-target.md` takes as its target layout.
 
 **Accepted for now, revisit when seen**
 
-5. **`lib-factory:move_files` is one slug for 11 stations.** All conveyors at the location run one after another. They are renames that take seconds, so this is acceptable. If it ever matters, key the exclusion by station and slug (the poll response would then need the station).
-6. **Synchronous calls block the whole process.** There are `execFileSync` calls (`gh`, `git` in the BL and RR utils, `stat` in `icloud-guard.js`) and `readdirSync` walks (AR0, AR1, backlog utils). They delay other tasks but don't break them. Measure event-loop delay before doing anything about it.
-7. **Competition for the machine.** Whisper (VM3), yt-dlp (Y1, M1) and rclone (AR2) can now run at the same time and compete for CPU, memory and bandwidth. This hasn't been seen yet. If it is, group heavy steps under a shared key.
-8. **Module-level state is benign.** In factory-alex-mac it is only `_version_cache` (the yt-dlp version) in `youtube-audio.js` and `youtube-video.js`, and constant `Set`s. In lib-factory it is the session flags and the templates dir, set once at startup.
+4. **`lib-factory:move_files` is one slug for 11 stations.** All conveyors at a location run one after another. They are renames that take seconds. If it ever matters, key the exclusion by station and slug.
+5. **Synchronous calls block the whole process.** `execFileSync` (`gh`, `git` in the BL and RR utils, `stat` in `icloud-guard.js`) and `readdirSync` walks (AR0, AR1, backlog utils) delay other tasks but don't break them.
+6. **Competition for the machine.** Whisper (VM3), yt-dlp (Y1, M1) and rclone (AR2) can now run at the same time. Not seen yet; if it is, group heavy steps under a shared key.
+7. **Module-level state is benign.** factory-alex-mac: only `_version_cache` (yt-dlp version) and constant `Set`s. lib-factory: session flags and the templates dir, set once at startup.
 
-**Already true today, not caused by this change (proposals, out of scope)**
+## Out of Scope
 
-- `/api/factory/complete` doesn't check whether the step was cancelled or the run timed out. A late completion still marks it `completed` and queues the next step.
-- `/api/factory/failed` resets a retryable step to `pending` with no backoff, so it can be claimed again on the next poll.
-- **Lost reports hang runs for 240 minutes** (seen, see "Why runs hang" above). A lost `/complete` or a lost poll response leaves the step `claimed` forever. Decided 2026-10-24 to keep this out of this change. A later fix could have the factory send its running `step_queue_id`s on each poll, so the orchestrator releases any `claimed` step at the location that isn't in the list, plus retry `reportComplete`/`reportFailed` against idempotent routes.
-- **An admin closing a session** (D2) makes the factory exit on its next poll without calling `/disconnect`, so its claims are not released.
-- **A poll in flight during shutdown** can claim a step after `/disconnect` released the session's claims (the poll passed the session check before the disconnect committed). That step stays `claimed`. The window is one poll, and the serial loop has it today.
-- **No index on `step_queue.factory_session`.** The release on `/disconnect` scans the table, once per disconnect. Add a partial index (`WHERE status = 'claimed'`) if disconnects get slow.
+**Restarts.** A step running when the factory restarts stays `claimed` until its run times out (240 minutes), and its station gets no new runs until then. A step whose child process dies with the restart (an `rclone` upload) can send its workpiece to `failed/`, and it is requeued with `al-control workpieces requeue`. Both were already true before this change. Tried and reverted on 2026-10-24, because it went beyond this WIP: releasing claims on `/api/factory/disconnect`, a same-host takeover of the session (orchestrator decision 0005), and lib-factory shutdown changes (0.36.0's poll wait, 0.36.1, 0.36.2). Reverts: orchestrator `23669bbc`, `7e3f0ab7`; lib-factory 0.36.3 (`e389fd7`).
+
+**Lost reports** (seen, see "Why runs hang" above). A lost `/complete` or a lost poll response leaves the step `claimed` until the 240-minute reaper; session `UacnLsx-cTKs` stranded 10 steps in 39 hours this way. This happens more often than restarts and is the better next piece of work. A possible fix: the factory sends its running `step_queue_id`s on each poll and the orchestrator releases any `claimed` step at the location that isn't in the list, plus retries of `reportComplete`/`reportFailed` against idempotent routes.
+
+**Also already true, not caused by this change:** `/api/factory/complete` doesn't check whether the step was cancelled or the run timed out; `/api/factory/failed` resets a retryable step with no backoff.
 
 ## Considered and Set Aside
 
-- **A. Small batches (`batch_size: 1`).** This is the stop-gap in place. The wait is still as long as the longest single item.
-- **B. A second session with its own location.** No library change, but `cleanupOrphanedDoing()` and the watchers would need scoping per session, and there would be more processes to run.
-- **C as first written: N slots and poll whenever a slot is free.** This needs a cap, a poll that doesn't claim (for the heartbeat while slots are full) and a separate per-station exclusivity mechanism. The per-step exclusion design gives the same result without any of the three.
-- **D. A child process per task.** Only worth it if synchronous CPU work (item 6) turns out to block the loop.
-- **E. Detached long jobs inside a station.** Every long station would have to reimplement start, poll and finish.
+- **A. Small batches (`batch_size: 1`).** The stop-gap in place. The wait is still as long as the longest single item.
+- **B. A second session with its own location.** `cleanupOrphanedDoing()` and the watchers would need scoping per session, and there would be more processes to run.
+- **C as first written: N slots, poll whenever a slot is free.** Needs a cap, a poll that doesn't claim, and a separate per-station exclusivity mechanism. Per-step exclusion gives the same result without them.
+- **D. A child process per task.** Only worth it if synchronous CPU work (item 5) turns out to block the loop.
+- **E. Detached long jobs inside a station.** Every long station would reimplement start, poll and finish.
 
 ## Implementation Phases
 
 ### Phase 1: Orchestrator ✅
-- [x] Poll reads `X-Exclude-Steps` (comma-separated slugs) and adds `AND step_slug NOT IN (...)` when non-empty
-- [x] `/api/factory/disconnect` resets the session's `claimed` steps to `pending` and logs `run.step.released` (item 1)
-- [x] Tests: `tests/api/factory/poll-exclude-steps.test.js`, `disconnect.test.js`. Also run once against a throwaway Postgres loaded from `scripts/db/schema.sql`: exclusions (including `lib-factory:move_files`), quoting, release scoped to the session, the next session claiming the released step
-- [x] Committed: orchestrator `30337788`
-- [x] Deployed 2026-10-24 (CI 40027520035, Deploy Main 40028038311). Production check: a poll with `X-Exclude-Steps` at a location with no work returned 200 `{task: null}`, and `/disconnect` for an unknown session returned `released_steps: 0`. factory-alex-mac on lib-factory 0.2.0 kept claiming and completing tasks. The browser smoke check covered only the public pages, which all redirect to `/login` (no saved login session).
-- [ ] Restart factory-alex-mac while a step runs; check `run.step.released` in its activity and that the step runs again (done in Phase 3, on the new lib-factory)
+- [x] Poll reads `X-Exclude-Steps` (comma-separated slugs) and adds `AND step_slug NOT IN (...)` when non-empty (`30337788`)
+- [x] Tests: `tests/api/factory/poll-exclude-steps.test.js`; also run once against a throwaway Postgres loaded from `scripts/db/schema.sql` (exclusions including `lib-factory:move_files`, quoting)
+- [x] Deployed 2026-10-24. Production check: a poll with `X-Exclude-Steps` at a location with no work returned 200 `{task: null}`; factory-alex-mac on lib-factory 0.2.0 kept claiming and completing tasks
 
 ### Phase 2: lib-factory ✅
 - [x] `running_tasks` map; `pollForTask(excluded_steps)` sends the header; `executeTask` runs without the loop waiting for it
 - [x] Error lines carry `wr:{id} [slug]`, report errors carry the task id
-- [x] Shutdown stops polling and waits for a poll in flight before disconnecting; the session also disconnects when the orchestrator closes it
-- [x] Tests (`test/factory.test.js`, fake orchestrator over HTTP): two different slugs run at once; the same slug never overlaps; a failed step frees its slug; SIGINT disconnects after the last poll; a closed session disconnects. The two concurrency tests fail against the old loop
-- [x] Docs: `polling-loop.md`, `graceful-shutdown.md` (no longer claims it waits for the current task), CHANGELOG
-- [x] Release 0.36.0, git tag only, no npm (origin's tags v0.3.0 to v0.35.0 are left over from lib-worker, so 0.3.0 was taken). Factories on `^0.2.2` don't pick it up
+- [x] Tests (`test/factory.test.js`, fake orchestrator over HTTP): two slugs run at once; the same slug never overlaps; a failed step frees its slug; SIGINT disconnects. The two concurrency tests fail against the old loop
+- [x] Docs: `polling-loop.md`, `graceful-shutdown.md` (describes what shutdown actually does), CHANGELOG
+- [x] Released as 0.36.0 and, with the restart work reverted, 0.36.3 (on npm). The tags v0.3.0 to v0.35.0 are left over from lib-worker, so the numbering jumps from 0.2.2
 
 ### Phase 3: Roll out 🔄
-- [x] Audit factory-alex-mac steps for state shared across steps. Nothing found: each intake registry and `input.txt` belongs to one station, scratch folders come from `mkdtemp`, the backlog git commits are synchronous (`execFileSync`), and module state is only the yt-dlp version cache
-- [x] 0.36.1: shutdown waits at most 500 ms for a poll in flight. pm2 sends SIGKILL 1.6 s after SIGINT (default `kill_timeout`), and the first version's 3 s wait could keep the disconnect from leaving
-- [x] factory-alex-mac on 0.36.1 (`985b259`), restarted 2026-10-24 03:17 (`pm2 restart`). The old 0.2.0 session ended `disconnected`; VM3 run `bLMuP2ax2mBV` had step 1 completed by the old session and step 2 by the new one (`LC50Si3pcknz`). Its tests pass except `openrouter-whisper.test.js` (expects `filename` in the request body, the code sends `audio_filename`), which fails on 0.2.0 too
-- [ ] Check that other stations finish while an AR2 upload runs. Run `P1PsqIJXtHuQ` blocked AR2 and was cancelled by hand at 03:26 (the first attempt hit `fetch failed`). Its step was claimed at 00:57:36 and the process got SIGINT right after starting it; its session ended `expired`, not `disconnected`, so that disconnect never arrived. This was a restart stranding a claim, seen live, before the release existed
-- [ ] Restart while an AR2 upload runs; check `run.step.released` in its activity and that the upload starts again. **Tried 2026-10-24 03:43 and it failed:** the disconnect was lost (network drops; pm2 SIGKILLs 1.6 s after SIGINT), so the old session `LC50Si3pcknz` kept the location. The restart was refused with 409, and pm2 restarted it 290 times over 6 minutes until the session expired. The AR2 step it held (run `4dl7BCOQrU3w`) stayed `claimed`. Fixed on the orchestrator by decision 0005 (`3934f8cd`, deployed 2026-10-24): a restart from the same host and folder takes over its predecessor's session and releases its claims. Run `4dl7BCOQrU3w` belongs to the expired session, so it needs cancelling by hand (or the reaper at about 07:31) before AR2 runs again; then repeat this check
-- [ ] Watch event-loop delay (item 6) and machine load (item 7). Decided 2026-10-24 to move every factory now rather than after a week on factory-alex-mac
+- [x] Audit factory-alex-mac steps for state shared across steps. Nothing found: each intake registry and `input.txt` belongs to one station, scratch folders come from `mkdtemp`, the backlog git commits are synchronous, and module state is only the yt-dlp version cache
+- [x] Other stations finish while an AR2 upload runs (factory-alex-mac on 0.36.1, 2026-10-24 03:27 to 03:38): 100 of the 154 tasks the session started began while another task ran, with the upload still going
+- [x] Every factory on lib-factory 0.36.1 from npm, deployed (Mac and alex-linux-pc), sessions active, no new errors. Tests pass apart from failures that were already there (factory-alex: 4 `data_freshness_report` suites import the removed `src/utils/email.js`; factory-alex-mac: `openrouter-whisper.test.js` expects `filename`, the code sends `audio_filename`). factory-tech has no git remote, so its bump is committed only
+- [x] Every factory on 0.36.3 from npm (the restart work reverted), 2026-10-24: alex-linux-pc 04:35–04:37, factory-alex-mac 04:45 (session `If83ogoRvOte`). Every old session ended `disconnected`. The AR2 upload cut off by the Mac restart left `arc-13` in `input/`; its run `O0pXhfiF9kFu` was cancelled by hand so AR2 picks it up again
 - [ ] Decide whether to remove AR2's `batch_size: 1`
-- [x] Published 0.36.1 to npm (`latest`; built from `3cffa15`, whose published files are identical to `v0.36.1`). Every factory now depends on `^0.36.1` from npm. Each one's tests pass, apart from failures that were already there (factory-alex: 4 `data_freshness_report` suites import the removed `src/utils/email.js`; factory-alex-mac: `openrouter-whisper.test.js`). Pushed: factory-alex `1404da4`, factory-actual `7b89b26`, factory-chisel `28fb665`, factory-vrudhijain `1138ddf`, factory-template `b7b2592`, factory-alex-mac `21b2eec`. factory-tech `1431058` is committed only, because the repo has no remote
-- [x] Deployed to alex-linux-pc 2026-10-24 04:06–04:08: factory-alex, factory-actual, factory-chisel, factory-tech, factory-vrudhijain. Each: `unison`, `npm install` with nvm Node 22.21.0 (what pm2 runs; `/usr/bin/node` is 18), `pm2 restart`. Every old session ended `disconnected` and a new one came up `active`, with no new errors. (factory-vrudhijain's unison exits non-zero on an unrelated data PDF whose name differs from another only by case; its package files synced)
-
-**Seen during rollout:** of the four restarts in the log before 0.36.1, two disconnects never reached the orchestrator. The release on disconnect covers a restart only when the disconnect arrives. Lost disconnects, like lost reports, are part of the follow-up above.
+- [ ] Watch event-loop delay (item 5) and machine load (item 6)
 
 ## Related Files
 
@@ -171,5 +160,5 @@ I read through the orchestrator (poll, complete, failed, `stationStepComplete`, 
 - `src/utils/workpiece-station.js`: `processWorkpiece`, `cleanupOrphanedDoing`
 - `src/utils/bin-watch-trigger.js`: `hasInFlightRun`
 - `docs/architecture/polling-loop.md`, `docs/architecture/graceful-shutdown.md`
-- Orchestrator: `src/app/api/factory/poll/route.js`, `src/app/api/factory/complete/route.js`, `src/app/api/factory/failed/route.js`, `src/jobs/stationStepComplete.js`, `src/jobs/reapStuckStations.js`, `src/jobs/expireFactorySessions.js`, `docs/decisions/0001-one-active-worker-session-per-location.md`
+- Orchestrator: `src/app/api/factory/poll/route.js`, `src/jobs/stationStepComplete.js`, `src/jobs/reapStuckStations.js`, `docs/decisions/0001-one-active-worker-session-per-location.md`
 - Evidence: factory-alex-mac `docs/wip/b2-archive-line.md` ("Seen Problems")
