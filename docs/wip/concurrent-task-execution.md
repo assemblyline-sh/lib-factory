@@ -151,7 +151,7 @@ I read through the orchestrator (poll, complete, failed, `stationStepComplete`, 
 - [x] Other stations finish while an AR2 upload runs (factory-alex-mac on 0.36.1, 2026-10-24 03:27 to 03:38): 100 of the 154 tasks the session started began while another task ran, with the upload still going
 - [x] Every factory on lib-factory 0.36.1 from npm, deployed (Mac and alex-linux-pc), sessions active, no new errors. Tests pass apart from failures that were already there (factory-alex: 4 `data_freshness_report` suites import the removed `src/utils/email.js`; factory-alex-mac: `openrouter-whisper.test.js` expects `filename`, the code sends `audio_filename`). factory-tech has no git remote, so its bump is committed only
 - [x] Every factory on 0.36.3 from npm (the restart work reverted), 2026-10-24: alex-linux-pc 04:35–04:37, factory-alex-mac 04:45 (session `If83ogoRvOte`). Every old session ended `disconnected`. The AR2 upload cut off by the Mac restart left `arc-13` in `input/`; its run `O0pXhfiF9kFu` was cancelled by hand so AR2 picks it up again
-- [ ] Decide whether to remove AR2's `batch_size: 1`
+- [x] AR2 keeps `batch_size: 1` (decided 2026-10-24): the files are large, so one file per run stays
 - [ ] Watch event-loop delay (item 5) and machine load (item 6)
 
 ## Related Files
