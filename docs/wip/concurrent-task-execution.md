@@ -1,6 +1,6 @@
 # Concurrent Task Execution in a Factory Session
 
-## Status: IN PROGRESS (~70%)
+## Status: IN PROGRESS (~85%)
 
 A factory session runs one task at a time. While one long step runs (a multi-GB upload, a long transcription), every other station on that location waits, the session stops polling, and the orchestrator times out runs queued behind it. This WIP records how the session works today, the evidence that it now hurts, and the chosen fix. The session runs a task of each step slug at the same time. It tells the orchestrator which slugs are busy, so no step ever runs twice at once. The WIP also lists what reading the code turned up.
 
@@ -160,7 +160,8 @@ I read through the orchestrator (poll, complete, failed, `stationStepComplete`, 
 - [ ] Restart while an AR2 upload runs; check `run.step.released` in its activity and that the upload starts again
 - [ ] Watch event-loop delay (item 6) and machine load (item 7). Decided 2026-10-24 to move every factory now rather than after a week on factory-alex-mac
 - [ ] Decide whether to remove AR2's `batch_size: 1`
-- [ ] Other factories (`/bump-dependents`): factory-alex, factory-actual, factory-chisel (git tag `#v0.2.0`), factory-tech, factory-vrudhijain, factory-template (npm `^0.2.2`). On 2026-10-24 03:30 alex-linux-pc was unreachable (SSH timed out) and every session there had been `disconnected` since 2026-10-23 21:16, so their restarts wait for the PC: `unison ec2code -path <folder>`, then `ssh alex@alex-linux-pc 'pm2 restart <process>'`
+- [x] Published 0.36.1 to npm (`latest`; built from `3cffa15`, whose published files are identical to `v0.36.1`). Every factory now depends on `^0.36.1` from npm. Each one's tests pass, apart from failures that were already there (factory-alex: 4 `data_freshness_report` suites import the removed `src/utils/email.js`; factory-alex-mac: `openrouter-whisper.test.js`). Pushed: factory-alex `1404da4`, factory-actual `7b89b26`, factory-chisel `28fb665`, factory-vrudhijain `1138ddf`, factory-template `b7b2592`, factory-alex-mac `21b2eec`. factory-tech `1431058` is committed only, because the repo has no remote
+- [ ] Deploy to alex-linux-pc when it is reachable again (unreachable on 2026-10-24 03:30; every session there `disconnected` since 2026-10-23 21:16). Per factory (alex, actual, chisel, tech, vrudhijain): `unison ec2code -path assemblyline/factories/<repo>`, then `ssh alex@alex-linux-pc 'cd ~/ec2code/assemblyline/factories/<repo> && npm install && pm2 restart <process>'` (`node_modules` is not synced). Then check its session in `al-orc --profile <org> factory-sessions list`
 
 **Seen during rollout:** of the four restarts in the log before 0.36.1, two disconnects never reached the orchestrator. The release on disconnect covers a restart only when the disconnect arrives. Lost disconnects, like lost reports, are part of the follow-up above.
 
