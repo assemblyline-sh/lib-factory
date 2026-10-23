@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.36.2] - 2026-10-24
+
+### Fixed
+- A step that fails while the session shuts down no longer sends its workpiece to
+  `failed/`. pm2 signals the whole process tree, so a restart killed AR2's `rclone` upload,
+  and `processWorkpiece` moved the workpiece to `AR2/failed` before the process exited.
+  Now it stays in `input/` and the next session redoes it. The factory also doesn't report
+  such a step as failed, so restarts don't use up its retries.
+
 ## [0.36.1] - 2026-10-24
 
 ### Fixed

@@ -9,6 +9,7 @@ import { initTemplates } from './utils/template-renderer.js';
 import { buildUserAgent } from './utils/build-user-agent.js';
 import { cleanupOrphanedDoing } from './utils/workpiece-station.js';
 import { orchestratorUrl } from './utils/orchestrator-url.js';
+import { markShuttingDown, isShuttingDown } from './utils/shutdown.js';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -231,6 +232,9 @@ async function executeTask(task, get_handler) {
   } catch (error) {
     console.error(`[Factory] wr:${work_record.id} [${step.slug}] error: ${error.message}`);
     console.log(`--- wr:${work_record.id} failed`);
+    // Failing because the session is shutting down: the disconnect (or the next
+    // session's takeover) puts the step back to pending, so don't spend a retry.
+    if (isShuttingDown()) return;
     await reportFailed(step_queue_id, error.message, true);
   }
 }
@@ -292,6 +296,7 @@ export async function startFactory({ getHandler, callerUrl }) {
   const shutdown = async (signal) => {
     if (shutting_down) return;
     shutting_down = true;
+    markShuttingDown();
     console.log(`[Factory] Received ${signal}, shutting down...`);
     if (running_tasks.size > 0) {
       console.log(`[Factory] Stopping with ${running_tasks.size} task(s) running: ${[...running_tasks.keys()].join(', ')}`);
@@ -318,6 +323,7 @@ export async function startFactory({ getHandler, callerUrl }) {
     // so that is all it does).
     if (is_session_closed) {
       console.log('[Factory] Session was closed by the orchestrator. Exiting.');
+      markShuttingDown();
       await reportDisconnect();
       process.exit(0);
     }

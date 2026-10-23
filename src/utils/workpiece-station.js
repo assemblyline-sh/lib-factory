@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { bin } from '../factoryPaths.js';
 import { logEvent } from './workpiece-log.js';
+import { isShuttingDown } from './shutdown.js';
 
 const STATIONS_DIR = path.join(process.cwd(), 'temp', 'stations');
 
@@ -24,6 +25,10 @@ const STATIONS_DIR = path.join(process.cwd(), 'temp', 'stations');
  *       retry re-processes a workpiece already sitting in done/)
  *   4b. Failure: emit station_failed, input → failed (pristine), overlay log
  *       from doing, write error.txt, rm -rf doing
+ *   4c. Failure while the session shuts down: leave input/ in place (the doing/
+ *       copy is discarded at the next boot). The failure is most likely the
+ *       shutdown signal killing the body's child process (an rclone upload), and
+ *       the next session redoes the workpiece.
  *
  * @template T
  * @param {object} args
@@ -62,6 +67,9 @@ export async function processWorkpiece({ station, workpiece_id, work_record_id, 
 
     return { status: 'ok', value };
   } catch (err) {
+    if (isShuttingDown()) {
+      return { status: 'failed', error: err };
+    }
     logEvent(wp_doing, station, work_record_id, 'station_failed');
     promoteToFailed({ wp_input, wp_doing, wp_failed, err });
     return { status: 'failed', error: err };

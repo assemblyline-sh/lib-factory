@@ -1,99 +1,29 @@
 // @ts-check
 import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import http from 'node:http';
+import { Exit, deferred, until, startFakeOrchestrator, controllableHandlers } from './helpers/fake-orchestrator.js';
 
 /**
- * startFactory against a fake orchestrator over real HTTP. The fake claims like the
- * real poll route: oldest pending step first, skipping slugs in X-Exclude-Steps.
+ * startFactory against a fake orchestrator over real HTTP (test/helpers/fake-orchestrator.js).
  *
  * Each test imports a fresh copy of src/factory.js (query string) because the module
  * keeps session state. process.exit is mocked to throw, which ends startFactory.
  */
 
-class Exit extends Error {
-  /** @param {number} code */
-  constructor(code) { super(`exit ${code}`); this.code = code; }
-}
+// The shutdown flag is process-wide and every test ends by shutting a session down,
+// so each test gets its own copy of the flag.
+let is_shutting_down = false;
+mock.module('../src/utils/shutdown.js', {
+  namedExports: {
+    markShuttingDown: () => { is_shutting_down = true; },
+    isShuttingDown: () => is_shutting_down,
+  },
+});
 
-/** @returns {{ promise: Promise<void>, resolve: () => void }} */
-function deferred() {
-  let resolve;
-  const promise = new Promise((r) => { resolve = r; });
-  return { promise, resolve };
-}
-
-const until = async (/** @type {() => boolean} */ check, ms = 2000) => {
-  const start = Date.now();
-  while (!check()) {
-    if (Date.now() - start > ms) throw new Error('timed out waiting');
-    await new Promise((r) => setTimeout(r, 5));
-  }
-};
-
-/**
- * @param {Array<{ id: string, slug: string }>} steps - pending steps, oldest first
- */
-function startFakeOrchestrator(steps) {
-  const queue = steps.map((s) => ({ ...s, status: 'pending' }));
-  /** @type {Array<{ path: string, exclude: string|null, body?: any }>} */
-  const requests = [];
-  let close_session = false;
-
-  const server = http.createServer((req, res) => {
-    let raw = '';
-    req.on('data', (c) => { raw += c; });
-    req.on('end', () => {
-      const body = raw ? JSON.parse(raw) : undefined;
-      const exclude = /** @type {string|undefined} */ (req.headers['x-exclude-steps']) ?? null;
-      requests.push({ path: req.url || '', exclude, body });
-      const send = (/** @type {any} */ obj) => {
-        res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify(obj));
-      };
-
-      if (req.url === '/api/factory/poll') {
-        if (close_session) return send({ task: null, session_id: null, session_closed: true });
-        const excluded = exclude ? exclude.split(',') : [];
-        const next = queue.find((s) => s.status === 'pending' && !excluded.includes(s.slug));
-        if (!next) return send({ task: null, session_id: 'sess_1' });
-        next.status = 'claimed';
-        return send({
-          task: {
-            step_queue_id: next.id,
-            step: { slug: next.slug, config: {} },
-            work_record: { id: `wr_${next.id}`, step_outputs: {} },
-            org_id: 'org_a',
-          },
-          session_id: 'sess_1',
-        });
-      }
-      if (req.url === '/api/factory/complete') {
-        queue.find((s) => s.id === body.step_queue_id).status = 'completed';
-        return send({ success: true });
-      }
-      if (req.url === '/api/factory/failed') {
-        queue.find((s) => s.id === body.step_queue_id).status = 'failed';
-        return send({ success: true });
-      }
-      if (req.url === '/api/factory/disconnect') return send({ success: true });
-      res.writeHead(404); res.end();
-    });
-  });
-
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => {
-      const address = /** @type {import('node:net').AddressInfo} */ (server.address());
-      resolve({
-        url: `http://127.0.0.1:${address.port}`,
-        queue,
-        requests,
-        polls: () => requests.filter((r) => r.path === '/api/factory/poll'),
-        closeSession: () => { close_session = true; },
-        stop: () => new Promise((r) => server.close(r)),
-      });
-    });
-  });
+/** Method mocks, restored after each test. (mock.restoreAll would also drop the module mock above.) */
+let method_mocks = [];
+function mockMethod(object, name, implementation) {
+  method_mocks.push(mock.method(object, name, implementation));
 }
 
 let import_count = 0;
@@ -102,46 +32,23 @@ async function importFactory() {
   return import(`../src/factory.js?instance=${import_count}`);
 }
 
-/**
- * Handlers that record when they start and finish, and finish when the test says so.
- * @param {string[]} slugs
- */
-function controllableHandlers(slugs) {
-  /** @type {Record<string, { started: string[], running: number, max_running: number, gates: ReturnType<typeof deferred>[] }>} */
-  const state = {};
-  for (const slug of slugs) state[slug] = { started: [], running: 0, max_running: 0, gates: [] };
-  const getHandler = (/** @type {string} */ slug) => {
-    const s = state[slug];
-    if (!s) return null;
-    return async (/** @type {any} */ task) => {
-      const gate = deferred();
-      s.gates.push(gate);
-      s.started.push(task.step_queue_id);
-      s.running++;
-      s.max_running = Math.max(s.max_running, s.running);
-      await gate.promise;
-      s.running--;
-      return { ok: true };
-    };
-  };
-  return { state, getHandler };
-}
-
 const ENV_KEYS = ['ORCHESTRATOR_URL', 'ORCHESTRATOR_API_KEY', 'ORCHESTRATOR_API_SECRET', 'FACTORY_LOCATION', 'POLL_INTERVAL_MS'];
 let saved_env;
 let signal_listeners;
 let fake;
 
 beforeEach(() => {
+  is_shutting_down = false;
   saved_env = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
   signal_listeners = { SIGINT: process.listeners('SIGINT'), SIGTERM: process.listeners('SIGTERM') };
-  mock.method(console, 'log', () => {});
-  mock.method(console, 'error', () => {});
-  mock.method(process, 'exit', (code) => { throw new Exit(code); });
+  mockMethod(console, 'log', () => {});
+  mockMethod(console, 'error', () => {});
+  mockMethod(process, 'exit', (code) => { throw new Exit(code); });
 });
 
 afterEach(async () => {
-  mock.restoreAll();
+  for (const m of method_mocks.reverse()) m.mock.restore();
+  method_mocks = [];
   for (const sig of /** @type {const} */ (['SIGINT', 'SIGTERM'])) {
     for (const l of process.listeners(sig)) if (!signal_listeners[sig].includes(l)) process.removeListener(sig, l);
   }
@@ -260,7 +167,7 @@ describe('startFactory — stopping', () => {
     setEnv(fake.url);
     const { state, getHandler } = controllableHandlers(['AR2_01_move_to_b2']);
     const exited = deferred();
-    mock.method(process, 'exit', () => { exited.resolve(); });
+    mockMethod(process, 'exit', () => { exited.resolve(); });
     const { startFactory } = await importFactory();
     void startFactory({ getHandler });
 
@@ -275,6 +182,27 @@ describe('startFactory — stopping', () => {
     assert.equal(fake.requests.at(-1).path, '/api/factory/disconnect');
     await new Promise((r) => setTimeout(r, 30));
     assert.equal(fake.polls().length, polls_at_exit, 'no poll after shutdown');
+  });
+
+  it('does not report a step that fails during shutdown, so no retry is spent', async () => {
+    fake = await startFakeOrchestrator([{ id: 'sq_upload', slug: 'AR2_01_move_to_b2' }]);
+    setEnv(fake.url);
+    const killed = deferred();
+    // Like rclone killed by the SIGINT that pm2 sends to the whole process tree.
+    const getHandler = () => async () => { await killed.promise; throw new Error('rclone_failed: (no output)'); };
+    const exited = deferred();
+    mockMethod(process, 'exit', () => { exited.resolve(); });
+    const { startFactory } = await importFactory();
+    void startFactory({ getHandler });
+
+    await until(() => fake.queue[0].status === 'claimed');
+    process.emit('SIGINT');
+    killed.resolve();
+    await exited.promise;
+    await new Promise((r) => setTimeout(r, 30));
+
+    assert.equal(fake.requests.filter((r) => r.path === '/api/factory/failed').length, 0);
+    assert.equal(fake.requests.filter((r) => r.path === '/api/factory/disconnect').length, 1);
   });
 
   it('disconnects before exiting when the orchestrator closed the session', async () => {

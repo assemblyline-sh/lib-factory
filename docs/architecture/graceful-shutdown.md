@@ -11,6 +11,12 @@ restart).
    running back to `pending`
 3. Exits. Tasks still running stop with the process
 
+pm2 signals the whole process tree, so a step's child process (an `rclone` upload) often
+dies before the factory does, and the step fails. Once shutdown has begun, that failure is
+not the work's: `processWorkpiece` leaves the workpiece in `input/` instead of moving it to
+`failed/`, and the factory does not report the step failed (which would spend a retry).
+A step that finishes during shutdown is still promoted and reported.
+
 The next session empties every `doing/` bin at boot, claims the released tasks and redoes
 their work from `input/`. The same disconnect runs when the orchestrator closes the session.
 
