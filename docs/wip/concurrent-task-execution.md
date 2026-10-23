@@ -1,6 +1,6 @@
 # Concurrent Task Execution in a Factory Session
 
-## Status: NOT STARTED (design chosen: per-step exclusion)
+## Status: IN PROGRESS (~25%)
 
 A factory session runs one task at a time. While one long step runs (a multi-GB upload, a long transcription), every other station on that location waits, the session stops polling, and the orchestrator times out runs queued behind it. This WIP records how the session works today, the evidence that it now hurts, and the chosen fix. The session runs a task of each step slug at the same time. It tells the orchestrator which slugs are busy, so no step ever runs twice at once. The WIP also lists what reading the code turned up.
 
@@ -48,9 +48,18 @@ Line AR's AR2 step uploads files to Backblaze B2 with `rclone move`; one 5.9 GB 
 |---|---|---|
 | `toILk0y5JXdg` | AR0 (intake) | `timed_out`: pending 30 min behind an AR2 upload; 48 queued paths not ingested |
 | `VwqtesPTn2eD` | VM2 | `timed_out`: pending 30 min, same window |
-| `KRZCyrmIM7tL`, `mIhm5rZQhiiO`, `tM341SVNheLo`, `kDwzd8rVtpcf` | VM2, VM4, VM3, VM5 | `timed_out`: running > 240 min (earlier the same day; cause not investigated here) |
+| `KRZCyrmIM7tL`, `mIhm5rZQhiiO`, `tM341SVNheLo`, `kDwzd8rVtpcf` | VM2, VM4, VM3, VM5 | `timed_out`: running > 240 min. Cause below (lost reports, not the serial loop) |
 
 Also seen: `[Factory] Poll error: fetch failed` lines in the session log during the AR2 upload, and the org has 24,629 `timed_out` work records in total (not all from this location; not broken down here).
+
+### Why runs hang for 240 minutes (investigated 2026-10-24)
+
+All four were claimed by session `UacnLsx-cTKs`, which ran without a restart from 10-22 07:37 to 10-23 22:22 (PID 32825, 13,599 tasks). So a restart is not the cause. Two causes, both seen:
+
+- **Lost completion report (VM2, VM3, VM5).** The factory log shows each conveyor step `done`, but the orchestrator has no `run.step.completed`. `reportComplete` logs a network error and gives up. The step stays `claimed`, so the run stays `running`. The error log has 23 `Complete report error: fetch failed` and 1 `Complete report failed: 522` (Cloudflare connection timed out).
+- **Lost poll response (VM4).** The orchestrator logged `run.step.claimed` for `VM4_01_clean_whisper` at 17:53:26, but the factory log never shows that task starting. The claim committed and the response never reached the factory, which saw `Poll error: fetch failed` (352 such lines in the error log).
+
+In both cases nothing ever puts the `claimed` step back. The run waits for the 240-minute reaper, and until then `hasInFlightRun` stops cron and the watchers from starting that station. Session `UacnLsx-cTKs` stranded 10 steps this way (8 `move_files`, 1 VM4, 1 VM5). A restart strands claims by the same mechanism, but none was seen here.
 
 Stop-gap applied in factory-alex-mac: AR2 `batch_size: 1`, so a run moves one file and other stations get a turn between files. The longest wait is still one file's upload.
 
@@ -112,6 +121,10 @@ I read through the orchestrator (poll, complete, failed, `stationStepComplete`, 
 
 - `/api/factory/complete` doesn't check whether the step was cancelled or the run timed out. A late completion still marks it `completed` and queues the next step.
 - `/api/factory/failed` resets a retryable step to `pending` with no backoff, so it can be claimed again on the next poll.
+- **Lost reports hang runs for 240 minutes** (seen, see "Why runs hang" above). A lost `/complete` or a lost poll response leaves the step `claimed` forever. Decided 2026-10-24 to keep this out of this change. A later fix could have the factory send its running `step_queue_id`s on each poll, so the orchestrator releases any `claimed` step at the location that isn't in the list, plus retry `reportComplete`/`reportFailed` against idempotent routes.
+- **An admin closing a session** (D2) makes the factory exit on its next poll without calling `/disconnect`, so its claims are not released.
+- **A poll in flight during shutdown** can claim a step after `/disconnect` released the session's claims (the poll passed the session check before the disconnect committed). That step stays `claimed`. The window is one poll, and the serial loop has it today.
+- **No index on `step_queue.factory_session`.** The release on `/disconnect` scans the table, once per disconnect. Add a partial index (`WHERE status = 'claimed'`) if disconnects get slow.
 
 ## Considered and Set Aside
 
@@ -123,11 +136,13 @@ I read through the orchestrator (poll, complete, failed, `stationStepComplete`, 
 
 ## Implementation Phases
 
-### Phase 1: Orchestrator ❌
-- [ ] Poll reads `X-Exclude-Steps` (comma-separated slugs) and adds `AND step_slug NOT IN (...)` when non-empty
-- [ ] `/api/factory/disconnect` resets the session's `claimed` steps to `pending` (item 1)
-- [ ] Test: an excluded slug is skipped and the next-oldest pending step is claimed; an empty or missing header behaves as today
-- [ ] Deploy (`ship`)
+### Phase 1: Orchestrator 🔄
+- [x] Poll reads `X-Exclude-Steps` (comma-separated slugs) and adds `AND step_slug NOT IN (...)` when non-empty
+- [x] `/api/factory/disconnect` resets the session's `claimed` steps to `pending` and logs `run.step.released` (item 1)
+- [x] Tests: `tests/api/factory/poll-exclude-steps.test.js`, `disconnect.test.js`. Also run once against a throwaway Postgres loaded from `scripts/db/schema.sql`: exclusions (including `lib-factory:move_files`), quoting, release scoped to the session, the next session claiming the released step
+- [x] Committed: orchestrator `30337788`
+- [ ] Deploy (`ship`). The poll is unchanged for today's factories (no header). The release on `/disconnect` applies to them at once, on their next restart.
+- [ ] After deploy: restart factory-alex-mac while a step runs; check `run.step.released` in its activity and that the step runs again
 
 ### Phase 2: lib-factory ❌
 - [ ] `running` map; `pollForTask(excluded_steps)` sends the header; `executeTask` runs without the loop waiting for it
