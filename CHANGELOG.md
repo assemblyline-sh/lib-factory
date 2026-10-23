@@ -7,14 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.36.2] - 2026-10-24
+## [0.36.3] - 2026-10-24
 
-### Fixed
-- A step that fails while the session shuts down no longer sends its workpiece to
-  `failed/`. pm2 signals the whole process tree, so a restart killed AR2's `rclone` upload,
-  and `processWorkpiece` moved the workpiece to `AR2/failed` before the process exited.
-  Now it stays in `input/` and the next session redoes it. The factory also doesn't report
-  such a step as failed, so restarts don't use up its retries.
+### Reverted
+- Shutdown is back to what it was before 0.36.0: disconnect, then exit. Removed: waiting for a
+  poll in flight (0.36.0, cut to 500 ms in 0.36.1), stopping the poll loop on shutdown, and
+  disconnecting when the orchestrator closes the session (0.36.0). They served the
+  orchestrator releasing a stopped session's claims, which is reverted too: restarts are out
+  of scope for running steps side by side. The `v0.36.2` tag (a shutdown flag for
+  `processWorkpiece`) was never published to npm and is superseded by this release.
 
 ## [0.36.1] - 2026-10-24
 

@@ -9,7 +9,6 @@ import { initTemplates } from './utils/template-renderer.js';
 import { buildUserAgent } from './utils/build-user-agent.js';
 import { cleanupOrphanedDoing } from './utils/workpiece-station.js';
 import { orchestratorUrl } from './utils/orchestrator-url.js';
-import { markShuttingDown, isShuttingDown } from './utils/shutdown.js';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -232,9 +231,6 @@ async function executeTask(task, get_handler) {
   } catch (error) {
     console.error(`[Factory] wr:${work_record.id} [${step.slug}] error: ${error.message}`);
     console.log(`--- wr:${work_record.id} failed`);
-    // Failing because the session is shutting down: the disconnect (or the next
-    // session's takeover) puts the step back to pending, so don't spend a retry.
-    if (isShuttingDown()) return;
     await reportFailed(step_queue_id, error.message, true);
   }
 }
@@ -281,27 +277,14 @@ export async function startFactory({ getHandler, callerUrl }) {
   /** @type {Map<string, string>} step slug → step_queue_id */
   const running_tasks = new Map();
 
-  /** The poll in flight, so shutdown can wait for it before disconnecting */
-  let current_poll = null;
-
   // Handle graceful shutdown. Announce departure so the orchestrator can free
   // this location immediately rather than waiting out the 5-minute expiry —
   // pm2 sends SIGINT on restart, so this is the common path, not the rare one.
-  // The orchestrator also puts the steps still running back to pending, so the
-  // next session runs them again. Wait briefly for a poll in flight first: a claim
-  // it makes after the disconnect would not be released. Briefly, because pm2
-  // sends SIGKILL 1.6 s after SIGINT (its default kill_timeout), and a disconnect
-  // that never leaves releases nothing.
   let shutting_down = false;
   const shutdown = async (signal) => {
     if (shutting_down) return;
     shutting_down = true;
-    markShuttingDown();
     console.log(`[Factory] Received ${signal}, shutting down...`);
-    if (running_tasks.size > 0) {
-      console.log(`[Factory] Stopping with ${running_tasks.size} task(s) running: ${[...running_tasks.keys()].join(', ')}`);
-    }
-    await Promise.race([current_poll, sleep(500)]);
     await reportDisconnect();
     process.exit(0);
   };
@@ -309,22 +292,13 @@ export async function startFactory({ getHandler, callerUrl }) {
   process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
   process.on('SIGINT', () => { void shutdown('SIGINT'); });
 
-  while (!shutting_down) {
-    current_poll = pollForTask([...running_tasks.keys()]);
-    const task = await current_poll;
-
-    // Shutdown began while the poll was in flight. Don't start the task: the
-    // disconnect puts it back to pending.
-    if (shutting_down) return;
+  while (true) {
+    const task = await pollForTask([...running_tasks.keys()]);
 
     // Session closed by the orchestrator — stop. Exit 0 so a process manager
-    // restarts us cleanly; we then register a fresh session. The disconnect puts
-    // the tasks still running back to pending (the session is already closed,
-    // so that is all it does).
+    // restarts us cleanly; we then register a fresh session.
     if (is_session_closed) {
       console.log('[Factory] Session was closed by the orchestrator. Exiting.');
-      markShuttingDown();
-      await reportDisconnect();
       process.exit(0);
     }
 
