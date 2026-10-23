@@ -1,6 +1,6 @@
 {
   "name": "@assemblyline/lib-factory",
-  "version": "0.2.2",
+  "version": "0.36.0",
   "description": "The runtime for Assembly Line factories: factory sessions, steps, bins, workpieces and watchers",
   "type": "module",
   "main": "src/index.js",

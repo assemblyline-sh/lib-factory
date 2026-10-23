@@ -1,6 +1,6 @@
 # Concurrent Task Execution in a Factory Session
 
-## Status: IN PROGRESS (~25%)
+## Status: IN PROGRESS (~70%)
 
 A factory session runs one task at a time. While one long step runs (a multi-GB upload, a long transcription), every other station on that location waits, the session stops polling, and the orchestrator times out runs queued behind it. This WIP records how the session works today, the evidence that it now hurts, and the chosen fix. The session runs a task of each step slug at the same time. It tells the orchestrator which slugs are busy, so no step ever runs twice at once. The WIP also lists what reading the code turned up.
 
@@ -136,19 +136,21 @@ I read through the orchestrator (poll, complete, failed, `stationStepComplete`, 
 
 ## Implementation Phases
 
-### Phase 1: Orchestrator 🔄
+### Phase 1: Orchestrator ✅
 - [x] Poll reads `X-Exclude-Steps` (comma-separated slugs) and adds `AND step_slug NOT IN (...)` when non-empty
 - [x] `/api/factory/disconnect` resets the session's `claimed` steps to `pending` and logs `run.step.released` (item 1)
 - [x] Tests: `tests/api/factory/poll-exclude-steps.test.js`, `disconnect.test.js`. Also run once against a throwaway Postgres loaded from `scripts/db/schema.sql`: exclusions (including `lib-factory:move_files`), quoting, release scoped to the session, the next session claiming the released step
 - [x] Committed: orchestrator `30337788`
-- [ ] Deploy (`ship`). The poll is unchanged for today's factories (no header). The release on `/disconnect` applies to them at once, on their next restart.
-- [ ] After deploy: restart factory-alex-mac while a step runs; check `run.step.released` in its activity and that the step runs again
+- [x] Deployed 2026-10-24 (CI 40027520035, Deploy Main 40028038311). Production check: a poll with `X-Exclude-Steps` at a location with no work returned 200 `{task: null}`, and `/disconnect` for an unknown session returned `released_steps: 0`. factory-alex-mac on lib-factory 0.2.0 kept claiming and completing tasks. The browser smoke check covered only the public pages, which all redirect to `/login` (no saved login session).
+- [ ] Restart factory-alex-mac while a step runs; check `run.step.released` in its activity and that the step runs again (done in Phase 3, on the new lib-factory)
 
-### Phase 2: lib-factory ❌
-- [ ] `running` map; `pollForTask(excluded_steps)` sends the header; `executeTask` runs without the loop waiting for it
-- [ ] Error log line carries `wr:{id} [slug]`
-- [ ] Tests: two different slugs run at once; the same slug never overlaps
-- [ ] Docs: `polling-loop.md`, `graceful-shutdown.md` (it says the session "waits for current task", which the code has never done), CHANGELOG; release
+### Phase 2: lib-factory ✅
+- [x] `running_tasks` map; `pollForTask(excluded_steps)` sends the header; `executeTask` runs without the loop waiting for it
+- [x] Error lines carry `wr:{id} [slug]`, report errors carry the task id
+- [x] Shutdown stops polling and waits for a poll in flight before disconnecting; the session also disconnects when the orchestrator closes it
+- [x] Tests (`test/factory.test.js`, fake orchestrator over HTTP): two different slugs run at once; the same slug never overlaps; a failed step frees its slug; SIGINT disconnects after the last poll; a closed session disconnects. The two concurrency tests fail against the old loop
+- [x] Docs: `polling-loop.md`, `graceful-shutdown.md` (no longer claims it waits for the current task), CHANGELOG
+- [x] Release 0.36.0, git tag only, no npm (origin's tags v0.3.0 to v0.35.0 are left over from lib-worker, so 0.3.0 was taken). Factories on `^0.2.2` don't pick it up
 
 ### Phase 3: Roll out ❌
 - [ ] factory-alex-mac: bump, deploy, and check that AR0 and the VM stations finish while an AR2 upload runs

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-10-24
+
+The version follows 0.2.2: the tags v0.3.0 to v0.35.0 on this repo are left over from
+lib-worker, so this release takes the next free number.
+
 ### Changed
 - A factory session runs tasks of different steps side by side. It starts each claimed task
   without waiting for it and keeps polling, so a long step (a multi-GB upload) no longer
