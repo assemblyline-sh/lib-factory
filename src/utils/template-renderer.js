@@ -110,17 +110,17 @@ export async function renderTemplate(templateName, data) {
 
   // Check cache first (in production)
   let template = template_cache.get(factory_path) || template_cache.get(lib_path);
-  let templatePath;
+  let template_path;
 
   if (!template) {
     // Try factory templates first, fall back to lib
     try {
       template = await readFile(factory_path, 'utf-8');
-      templatePath = factory_path;
+      template_path = factory_path;
     } catch (err) {
       if (err.code === 'ENOENT') {
         template = await readFile(lib_path, 'utf-8');
-        templatePath = lib_path;
+        template_path = lib_path;
       } else {
         throw err;
       }
@@ -128,22 +128,22 @@ export async function renderTemplate(templateName, data) {
 
     // Cache in production
     if (process.env.NODE_ENV === 'production') {
-      template_cache.set(templatePath, template);
+      template_cache.set(template_path, template);
     }
   } else {
     // Determine path for cached template (for EJS filename option)
-    templatePath = template_cache.has(factory_path) ? factory_path : lib_path;
+    template_path = template_cache.has(factory_path) ? factory_path : lib_path;
   }
 
   // Merge data with helpers
-  const templateData = {
+  const template_data = {
     ...data,
     ...helpers,
   };
 
   // views array: factory first, then lib (for include resolution)
-  return ejs.render(template, templateData, {
-    filename: templatePath,
+  return ejs.render(template, template_data, {
+    filename: template_path,
     views: [factory_templates_dir, lib_templates_dir],
   });
 }
